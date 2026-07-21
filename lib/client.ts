@@ -1,0 +1,232 @@
+"use client";
+
+import type { ApiConfig, Project, ProjectSummary } from "./types";
+
+const CONFIG_KEY = "novel-workflow.apiConfig"; // legacy single-config key (auto-migrated)
+const PROFILES_KEY = "novel-workflow.apiProfiles";
+
+export const DEFAULT_CONFIG: ApiConfig = {
+  baseUrl: "https://api.deepseek.com/v1",
+  apiKey: "",
+  model: "deepseek-chat",
+  temperature: 0.85,
+};
+
+// A named API profile lets users keep several providers/models and switch
+// between them on the fly.
+export interface ApiProfile {
+  id: string;
+  name: string;
+  config: ApiConfig;
+}
+
+export interface ProfileStore {
+  profiles: ApiProfile[];
+  activeId: string;
+}
+
+function readStore(): ProfileStore | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(PROFILES_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw) as ProfileStore;
+    if (!s || !Array.isArray(s.profiles) || s.profiles.length === 0) return null;
+    s.profiles = s.profiles.map((p) => ({
+      ...p,
+      config: { ...DEFAULT_CONFIG, ...p.config },
+    }));
+    if (!s.profiles.some((p) => p.id === s.activeId)) {
+      s.activeId = s.profiles[0].id;
+    }
+    return s;
+  } catch {
+    return null;
+  }
+}
+
+function writeStore(s: ProfileStore) {
+  localStorage.setItem(PROFILES_KEY, JSON.stringify(s));
+}
+
+// First run (or after upgrading from the single-config build): migrate the old
+// stored config into one profile, otherwise seed a default profile.
+function migrateOrSeed(): ProfileStore {
+  let cfg: ApiConfig = { ...DEFAULT_CONFIG };
+  try {
+    const legacy = localStorage.getItem(CONFIG_KEY);
+    if (legacy) cfg = { ...DEFAULT_CONFIG, ...JSON.parse(legacy) };
+  } catch {
+    // ignore malformed legacy config
+  }
+  const id = uid();
+  const store: ProfileStore = {
+    profiles: [{ id, name: "默认配置", config: cfg }],
+    activeId: id,
+  };
+  writeStore(store);
+  return store;
+}
+
+export function loadProfiles(): ProfileStore {
+  if (typeof window === "undefined") {
+    return {
+      profiles: [{ id: "default", name: "默认配置", config: { ...DEFAULT_CONFIG } }],
+      activeId: "default",
+    };
+  }
+  return readStore() ?? migrateOrSeed();
+}
+
+export function saveProfiles(store: ProfileStore) {
+  writeStore(store);
+}
+
+export function getActiveProfile(): ApiProfile {
+  const s = loadProfiles();
+  return s.profiles.find((p) => p.id === s.activeId) ?? s.profiles[0];
+}
+
+export function setActiveProfile(id: string) {
+  const s = loadProfiles();
+  if (s.profiles.some((p) => p.id === id)) {
+    s.activeId = id;
+    writeStore(s);
+  }
+}
+
+export function addProfile(name: string, config: ApiConfig): ApiProfile {
+  const s = loadProfiles();
+  const profile: ApiProfile = {
+    id: uid(),
+    name: name || "新配置",
+    config: { ...config },
+  };
+  s.profiles.push(profile);
+  s.activeId = profile.id; // newly added profile becomes active
+  writeStore(s);
+  return profile;
+}
+
+export function updateProfile(
+  id: string,
+  patch: { name?: string; config?: ApiConfig }
+) {
+  const s = loadProfiles();
+  s.profiles = s.profiles.map((p) =>
+    p.id === id
+      ? {
+          ...p,
+          name: patch.name ?? p.name,
+          config: patch.config ? { ...p.config, ...patch.config } : p.config,
+        }
+      : p
+  );
+  writeStore(s);
+}
+
+export function deleteProfile(id: string) {
+  const s = loadProfiles();
+  s.profiles = s.profiles.filter((p) => p.id !== id);
+  if (s.profiles.length === 0) {
+    const nid = uid();
+    s.profiles = [{ id: nid, name: "默认配置", config: { ...DEFAULT_CONFIG } }];
+    s.activeId = nid;
+  } else if (!s.profiles.some((p) => p.id === s.activeId)) {
+    s.activeId = s.profiles[0].id;
+  }
+  writeStore(s);
+}
+
+// Back-compat: the rest of the app reads/writes "the current config" and stays
+// oblivious to profiles — these delegate to the active profile.
+export function loadConfig(): ApiConfig {
+  if (typeof window === "undefined") return { ...DEFAULT_CONFIG };
+  return { ...getActiveProfile().config };
+}
+
+export function saveConfig(cfg: ApiConfig) {
+  const s = loadProfiles();
+  updateProfile(s.activeId, { config: cfg });
+}
+
+export function hasConfig(): boolean {
+  const c = loadConfig();
+  return Boolean(c.baseUrl && c.apiKey && c.model);
+}
+
+// ---- project REST helpers ----
+export async function fetchProjects(): Promise<ProjectSummary[]> {
+  const res = await fetch("/api/projects", { cache: "no-store" });
+  return res.json();
+}
+
+export async function createProject(title: string): Promise<Project> {
+  const res = await fetch("/api/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+  return res.json();
+}
+
+export async function fetchProject(id: string): Promise<Project | null> {
+  const res = await fetch(`/api/projects/${id}`, { cache: "no-store" });
+  if (!res.ok) return null;
+  return res.json();
+}
+
+export async function saveProjectRemote(project: Project): Promise<Project> {
+  const res = await fetch(`/api/projects/${project.id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(project),
+  });
+  return res.json();
+}
+
+export async function deleteProjectRemote(id: string): Promise<void> {
+  await fetch(`/api/projects/${id}`, { method: "DELETE" });
+}
+
+/**
+ * POST to a streaming endpoint and invoke onChunk with each decoded text
+ * fragment as it arrives. Returns the full accumulated text.
+ */
+export async function streamPost(
+  url: string,
+  body: unknown,
+  onChunk: (fullText: string, delta: string) => void,
+  signal?: AbortSignal
+): Promise<string> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!res.ok || !res.body) {
+    const msg = await res.text().catch(() => "请求失败");
+    throw new Error(msg || `请求失败 (${res.status})`);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let full = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const delta = decoder.decode(value, { stream: true });
+    full += delta;
+    onChunk(full, delta);
+  }
+  return full;
+}
+
+export function formatWords(n: number): string {
+  if (n >= 10000) return `${(n / 10000).toFixed(1)} 万字`;
+  return `${n} 字`;
+}
+
+export function uid(): string {
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}

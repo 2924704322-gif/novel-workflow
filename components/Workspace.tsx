@@ -1,0 +1,261 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import TopBar from "@/components/TopBar";
+import StepOutline from "@/components/StepOutline";
+import StepWriting from "@/components/StepWriting";
+import { fetchProject, formatWords, saveProjectRemote } from "@/lib/client";
+import { projectStats, type Project } from "@/lib/types";
+
+type Step = 1 | 2;
+
+export default function Workspace({ id }: { id: string }) {
+  const [project, setProject] = useState<Project | null>(null);
+  const [notFound, setNotFound] = useState(false);
+  const [step, setStep] = useState<Step>(1);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">(
+    "idle"
+  );
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latest = useRef<Project | null>(null);
+
+  useEffect(() => {
+    fetchProject(id).then((p) => {
+      if (!p) return setNotFound(true);
+      setProject(p);
+      latest.current = p;
+      setStep(p.phase === "writing" ? 2 : 1);
+    });
+  }, [id]);
+
+  const flush = useCallback(async () => {
+    if (!latest.current) return;
+    setSaveState("saving");
+    await saveProjectRemote(latest.current);
+    setSaveState("saved");
+  }, []);
+
+  // Update project state and debounce a save to the server.
+  const patch = useCallback(
+    (updater: (p: Project) => Project) => {
+      setProject((prev) => {
+        if (!prev) return prev;
+        const next = updater(prev);
+        latest.current = next;
+        setSaveState("saving");
+        if (saveTimer.current) clearTimeout(saveTimer.current);
+        saveTimer.current = setTimeout(flush, 900);
+        return next;
+      });
+    },
+    [flush]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, []);
+
+  if (notFound) {
+    return (
+      <>
+        <TopBar />
+        <main className="shell" style={{ paddingTop: 80, textAlign: "center" }}>
+          <p className="muted">这部作品不存在或已被删除。</p>
+          <Link href="/" className="btn btn--ghost" style={{ marginTop: 16 }}>
+            返回书房
+          </Link>
+        </main>
+      </>
+    );
+  }
+
+  if (!project) {
+    return (
+      <>
+        <TopBar />
+        <main className="shell" style={{ paddingTop: 80, textAlign: "center" }}>
+          <p className="faint">正在展开书卷…</p>
+        </main>
+      </>
+    );
+  }
+
+  const stats = projectStats(project);
+  const hasBible = Boolean(project.bible);
+  const progress =
+    project.setup.targetWords > 0
+      ? Math.min(100, (stats.totalWords / project.setup.targetWords) * 100)
+      : 0;
+
+  return (
+    <>
+      <TopBar
+        right={
+          <span
+            className="faint"
+            style={{ alignSelf: "center", fontSize: 12, minWidth: 52 }}
+          >
+            {saveState === "saving"
+              ? "保存中…"
+              : saveState === "saved"
+              ? "已保存"
+              : ""}
+          </span>
+        }
+      />
+
+      {/* Work header with steps + progress */}
+      <div style={{ borderBottom: "1px solid var(--line)" }}>
+        <div className="shell" style={{ paddingTop: 22, paddingBottom: 20 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 14,
+              flexWrap: "wrap",
+            }}
+          >
+            <Link href="/" className="faint" style={{ fontSize: 13 }}>
+              ← 书房
+            </Link>
+            <h1 style={{ fontSize: 26 }}>{project.title}</h1>
+            {project.setup.genre && (
+              <span className="chip">{project.setup.genre}</span>
+            )}
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 24,
+              marginTop: 18,
+              flexWrap: "wrap",
+            }}
+          >
+            <StepTab
+              n={1}
+              label="立意 · 大纲"
+              active={step === 1}
+              onClick={() => setStep(1)}
+            />
+            <div
+              style={{
+                flex: "0 0 40px",
+                height: 1,
+                background: "var(--line-strong)",
+              }}
+            />
+            <StepTab
+              n={2}
+              label="铺陈 · 正文"
+              active={step === 2}
+              disabled={!hasBible}
+              onClick={() => hasBible && setStep(2)}
+            />
+
+            <div style={{ marginLeft: "auto", minWidth: 220 }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: 12,
+                  marginBottom: 6,
+                }}
+                className="faint"
+              >
+                <span>
+                  {formatWords(stats.totalWords)} /{" "}
+                  {formatWords(project.setup.targetWords)}
+                </span>
+                <span>
+                  {stats.doneCount}/{stats.chapterCount} 章
+                </span>
+              </div>
+              <div
+                style={{
+                  height: 6,
+                  borderRadius: 6,
+                  background: "var(--ink-700)",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    width: `${progress}%`,
+                    height: "100%",
+                    background:
+                      "linear-gradient(90deg, var(--cinnabar-deep), var(--cinnabar-bright))",
+                    transition: "width .4s ease",
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {step === 1 ? (
+        <StepOutline project={project} patch={patch} goWriting={() => setStep(2)} />
+      ) : (
+        <StepWriting project={project} patch={patch} flush={flush} />
+      )}
+    </>
+  );
+}
+
+function StepTab({
+  n,
+  label,
+  active,
+  disabled,
+  onClick,
+}: {
+  n: number;
+  label: string;
+  active: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        background: "none",
+        border: "none",
+        padding: 0,
+        opacity: disabled ? 0.4 : 1,
+        cursor: disabled ? "not-allowed" : "pointer",
+      }}
+    >
+      <span
+        className="seal seal--sm"
+        style={{
+          background: active
+            ? undefined
+            : "var(--ink-700)",
+          color: active ? undefined : "var(--fg-dim)",
+          boxShadow: active ? undefined : "0 0 0 1px var(--line-strong) inset",
+        }}
+      >
+        {n}
+      </span>
+      <span
+        style={{
+          fontFamily: "var(--font-serif)",
+          fontSize: 16,
+          color: active ? "var(--fg)" : "var(--fg-dim)",
+        }}
+      >
+        {label}
+      </span>
+    </button>
+  );
+}

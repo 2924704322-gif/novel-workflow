@@ -1,0 +1,531 @@
+@import "tailwindcss";
+
+/*
+  Design language — "书斋朱印 / Ink & Cinnabar Atelier"
+  ---------------------------------------------------------------
+  Chrome  : deep indigo-ink, the writing desk at night.
+  Surface : warm manuscript paper for reading & drafting.
+  Accent  : 朱砂 cinnabar-red, used sparingly like a carved seal.
+  Signature: 方格稿纸 (grid manuscript paper) on the writing surface.
+*/
+
+:root {
+  --ink: #12151c;
+  --ink-800: #171b24;
+  --ink-700: #1e2330;
+  --ink-600: #2a3040;
+  --line: rgba(233, 230, 223, 0.09);
+  --line-strong: rgba(233, 230, 223, 0.16);
+
+  --fg: #eae7df;
+  --fg-dim: #9aa0ad;
+  --fg-faint: #626775;
+
+  --paper: #f3eee1;
+  --paper-2: #ece5d3;
+  --paper-line: #d9cdb2;
+  --paper-ink: #2a251c;
+  --paper-dim: #6f6653;
+
+  --cinnabar: #c1443a;
+  --cinnabar-bright: #d9534a;
+  --cinnabar-deep: #9c3229;
+  --jade: #5c8a72;
+  --gold: #c7a24b;
+
+  --font-serif: "Noto Serif SC", "Songti SC", "STSong", "SimSun", serif;
+  --font-sans: "Noto Sans SC", ui-sans-serif, system-ui, "PingFang SC",
+    "Microsoft YaHei", sans-serif;
+
+  --radius: 10px;
+  --shadow-panel: 0 1px 0 rgba(255, 255, 255, 0.03) inset,
+    0 18px 40px -24px rgba(0, 0, 0, 0.7);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+}
+
+body {
+  background: var(--ink);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  /* faint vertical ledger lines, like a desk blotter */
+  background-image: radial-gradient(
+    1200px 600px at 80% -10%,
+    rgba(193, 68, 58, 0.06),
+    transparent 60%
+  );
+  background-attachment: fixed;
+}
+
+::selection {
+  background: rgba(193, 68, 58, 0.28);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input,
+textarea,
+select {
+  font-family: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--cinnabar-bright);
+  outline-offset: 2px;
+}
+
+/* ---------- Seal / brand mark ---------- */
+.seal {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: linear-gradient(160deg, var(--cinnabar), var(--cinnabar-deep));
+  color: #fdeee7;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 20px;
+  box-shadow: 0 6px 16px -6px rgba(156, 50, 41, 0.8),
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset;
+}
+.seal--sm {
+  width: 30px;
+  height: 30px;
+  font-size: 15px;
+  border-radius: 6px;
+}
+
+/* ---------- Layout primitives ---------- */
+.shell {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  backdrop-filter: blur(10px);
+  background: rgba(18, 21, 28, 0.82);
+  border-bottom: 1px solid var(--line);
+}
+.topbar-inner {
+  height: 62px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.brand-name {
+  font-family: var(--font-serif);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.brand-sub {
+  font-size: 11px;
+  color: var(--fg-faint);
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+}
+
+.panel {
+  background: linear-gradient(180deg, var(--ink-800), var(--ink));
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-panel);
+}
+
+/* ---------- Buttons ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: var(--ink-700);
+  color: var(--fg);
+  font-size: 14px;
+  transition: background 0.15s ease, border-color 0.15s ease,
+    transform 0.05s ease;
+}
+.btn:hover {
+  background: var(--ink-600);
+  border-color: var(--fg-faint);
+}
+.btn:active {
+  transform: translateY(1px);
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.btn--primary {
+  background: linear-gradient(160deg, var(--cinnabar), var(--cinnabar-deep));
+  border-color: transparent;
+  color: #fdeee7;
+  font-weight: 600;
+}
+.btn--primary:hover {
+  background: linear-gradient(160deg, var(--cinnabar-bright), var(--cinnabar));
+}
+.btn--ghost {
+  background: transparent;
+  border-color: var(--line-strong);
+}
+.btn--ghost:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.btn--sm {
+  padding: 6px 11px;
+  font-size: 13px;
+}
+.btn--danger:hover {
+  border-color: var(--cinnabar);
+  color: var(--cinnabar-bright);
+}
+
+/* ---------- Form fields ---------- */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.label {
+  font-size: 13px;
+  color: var(--fg-dim);
+  font-weight: 500;
+}
+.hint {
+  font-size: 12px;
+  color: var(--fg-faint);
+}
+.input,
+.textarea,
+.select {
+  width: 100%;
+  background: var(--ink);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  color: var(--fg);
+  padding: 10px 12px;
+  font-size: 14px;
+  transition: border-color 0.15s ease;
+}
+.input:focus,
+.textarea:focus,
+.select:focus {
+  border-color: var(--cinnabar);
+  outline: none;
+}
+.textarea {
+  resize: vertical;
+  line-height: 1.7;
+}
+
+/* ---------- Chips / badges ---------- */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  border: 1px solid var(--line-strong);
+  color: var(--fg-dim);
+}
+.chip--cinnabar {
+  color: var(--cinnabar-bright);
+  border-color: rgba(193, 68, 58, 0.4);
+  background: rgba(193, 68, 58, 0.08);
+}
+.chip--jade {
+  color: #86c0a1;
+  border-color: rgba(92, 138, 114, 0.4);
+  background: rgba(92, 138, 114, 0.1);
+}
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--fg-faint);
+}
+.dot--done {
+  background: var(--jade);
+}
+.dot--draft {
+  background: var(--gold);
+}
+
+/* ---------- API profile switcher / manager ---------- */
+.profile-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px 3px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--ink);
+}
+.select--bare {
+  width: auto;
+  border: none;
+  background: transparent;
+  padding: 2px 4px;
+  font-size: 13px;
+  color: var(--fg);
+  cursor: pointer;
+}
+.select--bare:focus {
+  border: none;
+  outline: none;
+}
+.profile-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--ink);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.profile-row:hover {
+  border-color: var(--line-strong);
+  background: rgba(255, 255, 255, 0.02);
+}
+.profile-row[data-editing="1"] {
+  border-color: var(--cinnabar);
+}
+
+.muted {
+  color: var(--fg-dim);
+}
+.faint {
+  color: var(--fg-faint);
+}
+
+/* ---------- Manuscript surface (方格稿纸) ---------- */
+.manuscript {
+  background-color: var(--paper);
+  color: var(--paper-ink);
+  border-radius: var(--radius);
+  border: 1px solid var(--paper-line);
+  /* subtle green grid squares of classic Chinese manuscript paper */
+  background-image: linear-gradient(var(--paper-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--paper-line) 1px, transparent 1px);
+  background-size: 28px 28px;
+  background-position: -1px -1px;
+}
+.manuscript textarea,
+.manuscript .reader {
+  background: transparent;
+  color: var(--paper-ink);
+  font-family: var(--font-serif);
+  font-size: 17px;
+  line-height: 28px; /* aligns text to the grid */
+}
+.reader p {
+  margin: 0 0 28px;
+  text-indent: 2em;
+}
+
+/* thin scrollbars in dark chrome */
+.scroll-y {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-600) transparent;
+}
+.scroll-y::-webkit-scrollbar {
+  width: 9px;
+}
+.scroll-y::-webkit-scrollbar-thumb {
+  background: var(--ink-600);
+  border-radius: 6px;
+}
+
+/* ---------- animation ---------- */
+@keyframes fadeup {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.fadeup {
+  animation: fadeup 0.4s ease both;
+}
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.writing-cursor::after {
+  content: "▍";
+  color: var(--cinnabar);
+  animation: pulse 1s steps(2) infinite;
+  margin-left: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fadeup,
+  .writing-cursor::after {
+    animation: none;
+  }
+}
+
+/* ---------- page layouts ---------- */
+.work-card {
+  transition: border-color 0.15s ease, transform 0.05s ease;
+}
+.work-card:hover {
+  border-color: var(--line-strong);
+}
+
+.outline-grid {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 28px;
+  align-items: start;
+}
+
+/* Step 2 — nav + manuscript */
+.write-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 20px;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 24px;
+  align-items: start;
+}
+.write-nav {
+  position: sticky;
+  top: 78px;
+  max-height: calc(100vh - 100px);
+  padding-bottom: 12px;
+}
+.write-main {
+  min-width: 0;
+}
+.write-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.nav-chapter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg-dim);
+  font-size: 13px;
+  transition: background 0.12s ease;
+}
+.nav-chapter:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* Segmented tabs above the manuscript: 正文 / 设定库 / 伏笔 */
+.panel-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.ptab {
+  padding: 6px 14px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fg-dim);
+  font-size: 13px;
+  font-family: var(--font-serif);
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.ptab:hover {
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.04);
+}
+.ptab--on {
+  color: var(--fg);
+  background: var(--ink-700);
+  border-color: var(--cinnabar);
+}
+.codex-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+@media (max-width: 900px) {
+  .dash-grid,
+  .outline-grid,
+  .write-layout {
+    grid-template-columns: 1fr !important;
+  }
+  .write-nav {
+    position: static;
+    max-height: 320px;
+  }
+}
+
