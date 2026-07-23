@@ -14,6 +14,9 @@ export default function Workspace({ id }: { id: string }) {
   const [project, setProject] = useState<Project | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [step, setStep] = useState<Step>(1);
+  // 书名就地编辑（工作区顶部）：点「改名」切换为输入框，回车/失焦保存。
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">(
     "idle"
   );
@@ -54,9 +57,14 @@ export default function Workspace({ id }: { id: string }) {
 
   useEffect(() => {
     return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+        // 卸载前若仍有未落盘的改动（防抖窗口未到），立即补存一次，
+        // 避免用户在 900ms 内离开工作区时丢失正文等改动。
+        void flush();
+      }
     };
-  }, []);
+  }, [flush]);
 
   if (notFound) {
     return (
@@ -121,7 +129,45 @@ export default function Workspace({ id }: { id: string }) {
             <Link href="/" className="faint" style={{ fontSize: 13 }}>
               ← 书房
             </Link>
-            <h1 style={{ fontSize: 26 }}>{project.title}</h1>
+            {editingTitle ? (
+              <input
+                className="input"
+                autoFocus
+                value={titleDraft}
+                onChange={(e) => setTitleDraft(e.target.value)}
+                onBlur={() => {
+                  const t = titleDraft.trim();
+                  if (t && t !== project.title) {
+                    patch((p) => ({ ...p, title: t }));
+                  }
+                  setEditingTitle(false);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                  if (e.key === "Escape") setEditingTitle(false);
+                }}
+                style={{
+                  fontSize: 22,
+                  maxWidth: 360,
+                  fontFamily: "var(--font-serif)",
+                }}
+                placeholder="输入书名"
+              />
+            ) : (
+              <>
+                <h1 style={{ fontSize: 26 }}>{project.title}</h1>
+                <button
+                  className="btn btn--ghost btn--sm"
+                  onClick={() => {
+                    setTitleDraft(project.title);
+                    setEditingTitle(true);
+                  }}
+                  title="修改书名"
+                >
+                  改名
+                </button>
+              </>
+            )}
             {project.setup.genre && (
               <span className="chip">{project.setup.genre}</span>
             )}

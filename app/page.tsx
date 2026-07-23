@@ -1,68 +1,77 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import TopBar from "@/components/TopBar";
-import {
-  createProject,
-  deleteProjectRemote,
-  fetchProjects,
-  formatWords,
-  hasConfig,
-} from "@/lib/client";
-import type { ProjectSummary } from "@/lib/types";
+import { fetchProjects, hasConfig } from "@/lib/client";
 
-const PHASE_LABEL: Record<string, string> = {
-  setup: "待立意",
-  outline: "大纲中",
-  writing: "创作中",
-};
+const ENTRIES = [
+  {
+    href: "/new",
+    seal: "书",
+    title: "开一本新书",
+    desc: "起个书名，泡杯茶，先立个骨架，再慢慢往里填故事。",
+    go: "从头开始写 →",
+    grad: "linear-gradient(160deg, #d67e52, #a5502c)",
+    glow: "rgba(214, 126, 82, 0.22)",
+  },
+  {
+    href: "/style",
+    seal: "拆",
+    title: "拆书工坊",
+    desc: "把喜欢的书拆开看看——学它的文风，或抽出设定，二创开新篇。",
+    go: "拆一本来看看 →",
+    grad: "linear-gradient(160deg, #d3a24c, #a97b1f)",
+    glow: "rgba(211, 162, 76, 0.22)",
+  },
+  {
+    href: "/continue",
+    seal: "续",
+    title: "续写一本书",
+    desc: "导入一份 txt 底本，接着往下写。可套用拆好的文风与设定，自动记着前情。",
+    go: "导入底本续写 →",
+    grad: "linear-gradient(160deg, #6f8fae, #3f6690)",
+    glow: "rgba(111, 143, 174, 0.22)",
+  },
+  {
+    href: "/shelf",
+    seal: "架",
+    title: "我的书架",
+    desc: "翻翻手边正在写的那些书，接着上次的地方继续落笔。",
+    go: "回书架看看 →",
+    grad: "linear-gradient(160deg, #7f9b6e, #4f7a52)",
+    glow: "rgba(127, 155, 110, 0.22)",
+  },
+];
 
-export default function DashboardPage() {
-  const router = useRouter();
-  const [projects, setProjects] = useState<ProjectSummary[] | null>(null);
-  const [title, setTitle] = useState("");
-  const [creating, setCreating] = useState(false);
+export default function HomePage() {
+  const [count, setCount] = useState<number | null>(null);
   const [configReady, setConfigReady] = useState(true);
 
   useEffect(() => {
-    fetchProjects().then(setProjects);
+    fetchProjects().then((ps) => setCount(ps.length));
     setConfigReady(hasConfig());
   }, []);
-
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
-    setCreating(true);
-    const p = await createProject(title.trim() || "未命名作品");
-    router.push(`/project/${p.id}`);
-  }
-
-  async function handleDelete(id: string, name: string) {
-    if (!confirm(`确定删除《${name}》？此操作无法撤销。`)) return;
-    await deleteProjectRemote(id);
-    setProjects((prev) => prev?.filter((p) => p.id !== id) ?? null);
-  }
 
   return (
     <>
       <TopBar />
 
-      {/* Hero — a manuscript opening line, the most characteristic thing */}
-      <section className="shell" style={{ paddingTop: 72, paddingBottom: 28 }}>
+      {/* Hero — relaxed, unhurried welcome */}
+      <section className="shell" style={{ paddingTop: 76, paddingBottom: 30 }}>
         <div className="fadeup" style={{ maxWidth: 720 }}>
           <div className="chip chip--cinnabar" style={{ marginBottom: 20 }}>
-            两步成书 · 大纲先行 · 逐章落墨
+            不赶稿 · 不焦虑 · 一章一章慢慢来
           </div>
-          <h1 style={{ fontSize: 46, lineHeight: 1.18, marginBottom: 18 }}>
-            先立骨，
-            <span style={{ color: "var(--cinnabar-bright)" }}>再填肉</span>
+          <h1 style={{ fontSize: 46, lineHeight: 1.2, marginBottom: 18 }}>
+            找个舒服的姿势，
             <br />
-            让百万字长篇有章可循。
+            <span style={{ color: "var(--cinnabar-deep)" }}>把心里的故事</span>
+            写出来。
           </h1>
           <p className="muted" style={{ fontSize: 16, maxWidth: 560 }}>
-            第一步，梳理一份贯通全局的故事大纲——内核、世界、人物、卷章脉络；
-            第二步，依纲逐章成文，前后呼应，稳定推进到百万字。
+            这里是你的暖阁书房。想写就写，写累了就去拆本别人的书取取经，
+            回头再翻翻书架上没写完的那几本——一切都不急。
           </p>
         </div>
       </section>
@@ -76,150 +85,47 @@ export default function DashboardPage() {
               display: "flex",
               alignItems: "center",
               gap: 14,
-              borderColor: "rgba(193,68,58,.4)",
+              borderColor: "rgba(197,106,63,.4)",
             }}
           >
             <span className="dot dot--draft" />
             <span className="muted" style={{ flex: 1 }}>
-              尚未配置模型接口，生成功能暂不可用。先填入 API 地址、Key 与模型名。
+              还没接上模型接口，生成功能先歇着。填入 API 地址、Key 和模型名就能开工。
             </span>
             <Link href="/settings" className="btn btn--primary btn--sm">
-              前往设置
+              去设置
             </Link>
           </div>
         </section>
       )}
 
-      <main className="shell" style={{ paddingTop: 24, paddingBottom: 80 }}>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "320px 1fr",
-            gap: 28,
-            alignItems: "start",
-          }}
-          className="dash-grid"
-        >
-          {/* New work */}
-          <form onSubmit={handleCreate} className="panel" style={{ padding: 22 }}>
-            <h3 style={{ fontSize: 18, marginBottom: 4 }}>开一部新书</h3>
-            <p className="faint" style={{ fontSize: 13, marginBottom: 16 }}>
-              先起个书名，进入工作台后再细化设定。
-            </p>
-            <div className="field" style={{ marginBottom: 16 }}>
-              <label className="label" htmlFor="title">
-                书名
-              </label>
-              <input
-                id="title"
-                className="input"
-                placeholder="例如：《山海拾遗录》"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                maxLength={40}
-              />
-            </div>
-            <button
-              type="submit"
-              className="btn btn--primary"
-              style={{ width: "100%" }}
-              disabled={creating}
+      {/* Three entries */}
+      <main className="shell" style={{ paddingTop: 24, paddingBottom: 90 }}>
+        <div className="entry-grid">
+          {ENTRIES.map((e, i) => (
+            <Link
+              key={e.href}
+              href={e.href}
+              className="entry-card fadeup"
+              style={
+                {
+                  animationDelay: `${i * 70}ms`,
+                  ["--entry-glow" as string]: e.glow,
+                } as React.CSSProperties
+              }
             >
-              {creating ? "正在创建…" : "创建并进入工作台"}
-            </button>
-          </form>
-
-          {/* Library */}
-          <div>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "baseline",
-                justifyContent: "space-between",
-                marginBottom: 14,
-              }}
-            >
-              <h2 style={{ fontSize: 20 }}>我的书房</h2>
-              <span className="faint" style={{ fontSize: 13 }}>
-                {projects ? `${projects.length} 部作品` : "加载中…"}
+              <span className="entry-ico" style={{ background: e.grad }}>
+                {e.seal}
               </span>
-            </div>
-
-            {projects && projects.length === 0 && (
-              <div
-                className="panel"
-                style={{
-                  padding: "48px 24px",
-                  textAlign: "center",
-                }}
-              >
-                <p className="muted">书房还空着。从左侧创建你的第一部作品。</p>
-              </div>
-            )}
-
-            <div style={{ display: "grid", gap: 12 }}>
-              {projects?.map((p) => (
-                <div
-                  key={p.id}
-                  className="panel work-card"
-                  style={{
-                    padding: 18,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 16,
-                  }}
-                >
-                  <Link
-                    href={`/project/${p.id}`}
-                    style={{ flex: 1, minWidth: 0 }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 10,
-                        marginBottom: 6,
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontFamily: "var(--font-serif)",
-                          fontSize: 18,
-                          fontWeight: 600,
-                        }}
-                      >
-                        {p.title}
-                      </span>
-                      <span className="chip">{PHASE_LABEL[p.phase]}</span>
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: 16,
-                        fontSize: 13,
-                      }}
-                      className="faint"
-                    >
-                      <span>{p.genre || "题材未定"}</span>
-                      <span>·</span>
-                      <span>{formatWords(p.totalWords)}</span>
-                      <span>·</span>
-                      <span>
-                        {p.doneCount}/{p.chapterCount} 章完成
-                      </span>
-                    </div>
-                  </Link>
-                  <button
-                    className="btn btn--ghost btn--sm btn--danger"
-                    onClick={() => handleDelete(p.id, p.title)}
-                    aria-label="删除作品"
-                  >
-                    删除
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
+              <span className="entry-title">{e.title}</span>
+              <span className="entry-desc">{e.desc}</span>
+              <span className="entry-go">
+                {e.href === "/shelf" && count !== null
+                  ? `书架上有 ${count} 本 →`
+                  : e.go}
+              </span>
+            </Link>
+          ))}
         </div>
       </main>
     </>

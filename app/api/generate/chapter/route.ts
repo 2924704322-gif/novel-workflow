@@ -5,6 +5,7 @@ import type { ChapterContext } from "@/lib/retrieval";
 import type {
   ApiConfig,
   Chapter,
+  PromptEntry,
   ProjectSetup,
   StoryBible,
   Volume,
@@ -14,19 +15,32 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 600;
 
 // POST /api/generate/chapter
-// body: { config, setup, bible, volume, chapter, prevChapter, ctx? }
+// body: { config, setup, bible, volume, chapter, prevChapter, ctx?, globalNo?, direction?, prompts? }
 // Streams the chapter prose directly.
 export async function POST(req: NextRequest) {
-  const { config, setup, bible, volume, chapter, prevChapter, ctx } =
-    (await req.json()) as {
-      config: ApiConfig;
-      setup: ProjectSetup;
-      bible: StoryBible;
-      volume: Volume;
-      chapter: Chapter;
-      prevChapter: Chapter | null;
-      ctx?: ChapterContext;
-    };
+  const {
+    config,
+    setup,
+    bible,
+    volume,
+    chapter,
+    prevChapter,
+    ctx,
+    globalNo,
+    direction,
+    prompts,
+  } = (await req.json()) as {
+    config: ApiConfig;
+    setup: ProjectSetup;
+    bible: StoryBible;
+    volume: Volume;
+    chapter: Chapter;
+    prevChapter: Chapter | null;
+    ctx?: ChapterContext;
+    globalNo?: number;
+    direction?: string;
+    prompts?: PromptEntry[];
+  };
 
   const err = validateConfig(config);
   if (err) return new Response(err, { status: 400 });
@@ -34,7 +48,17 @@ export async function POST(req: NextRequest) {
   try {
     const stream = await streamChat(
       config,
-      buildChapterPrompt(setup, bible, volume, chapter, prevChapter, ctx),
+      buildChapterPrompt(
+        setup,
+        bible,
+        volume,
+        chapter,
+        prevChapter,
+        ctx,
+        globalNo,
+        direction,
+        prompts
+      ),
       { maxTokens: 8192 }
     );
     return new Response(stream, {

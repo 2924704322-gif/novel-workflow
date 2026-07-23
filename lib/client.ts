@@ -1,9 +1,22 @@
 "use client";
 
-import type { ApiConfig, Project, ProjectSummary } from "./types";
+import type {
+  ApiConfig,
+  Project,
+  ProjectSummary,
+  StoryArchive,
+  StoryBible,
+  StyleCard,
+} from "./types";
+import type {
+  ReconcileChange,
+  ReconcilePayload,
+  ReconcileResult,
+} from "./reconcile";
 
 const CONFIG_KEY = "novel-workflow.apiConfig"; // legacy single-config key (auto-migrated)
 const PROFILES_KEY = "novel-workflow.apiProfiles";
+const RECONCILE_PREF_KEY = "novel-workflow.autoReconcile";
 
 export const DEFAULT_CONFIG: ApiConfig = {
   baseUrl: "https://api.deepseek.com/v1",
@@ -158,6 +171,7 @@ export function hasConfig(): boolean {
 // ---- project REST helpers ----
 export async function fetchProjects(): Promise<ProjectSummary[]> {
   const res = await fetch("/api/projects", { cache: "no-store" });
+  if (!res.ok) return [];
   return res.json();
 }
 
@@ -167,6 +181,7 @@ export async function createProject(title: string): Promise<Project> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ title }),
   });
+  if (!res.ok) throw new Error("新建作品失败，请稍后重试。");
   return res.json();
 }
 
@@ -182,11 +197,34 @@ export async function saveProjectRemote(project: Project): Promise<Project> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(project),
   });
+  // 失败时回传原对象，避免把错误 JSON 当作作品写回状态。
+  if (!res.ok) return project;
   return res.json();
 }
 
 export async function deleteProjectRemote(id: string): Promise<void> {
   await fetch(`/api/projects/${id}`, { method: "DELETE" });
+}
+
+// ---- style card / story archive library helpers ----
+export async function fetchStyleCards(): Promise<StyleCard[]> {
+  const res = await fetch("/api/styles", { cache: "no-store" });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function deleteStyleCardRemote(hash: string): Promise<void> {
+  await fetch(`/api/styles/${hash}`, { method: "DELETE" });
+}
+
+export async function fetchArchives(): Promise<StoryArchive[]> {
+  const res = await fetch("/api/archives", { cache: "no-store" });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function deleteArchiveRemote(hash: string): Promise<void> {
+  await fetch(`/api/archives/${hash}`, { method: "DELETE" });
 }
 
 /**
@@ -220,6 +258,43 @@ export async function streamPost(
     onChunk(full, delta);
   }
   return full;
+}
+
+// ---- post-regeneration consistency reconciliation ----
+// Whether a regeneration should automatically re-align the downstream planning
+// artifacts. Defaults to on; persisted per browser.
+export function loadReconcilePref(): boolean {
+  if (typeof window === "undefined") return true;
+  return localStorage.getItem(RECONCILE_PREF_KEY) !== "0";
+}
+
+export function saveReconcilePref(on: boolean) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(RECONCILE_PREF_KEY, on ? "1" : "0");
+}
+
+/**
+ * Ask the server to reconcile downstream artifacts after a regeneration.
+ * Returns null on any failure so callers can silently skip reconciliation
+ * rather than blocking the user's main action.
+ */
+export async function requestReconcile(body: {
+  config: ApiConfig;
+  change: ReconcileChange;
+  payload: ReconcilePayload;
+  bible: StoryBible | null;
+}): Promise<ReconcileResult | null> {
+  try {
+    const res = await fetch("/api/generate/reconcile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as ReconcileResult;
+  } catch {
+    return null;
+  }
 }
 
 export function formatWords(n: number): string {

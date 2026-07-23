@@ -117,7 +117,9 @@ export function buildChapterContext(
   const flat = flattenChapters(project);
   const target = flat.find((f) => f.chapter.id === targetChapterId);
   const targetGlobal = target?.global ?? flat.length + 1;
-  const recent = recentSummaries(flat, targetGlobal, 4);
+  // Keep the most recent ≥5 chapter summaries so continuations (and normal
+  // writing) stay anchored to what just happened, not only the previous chapter.
+  const recent = recentSummaries(flat, targetGlobal, 5);
 
   const haystack = [
     target?.chapter.title ?? "",

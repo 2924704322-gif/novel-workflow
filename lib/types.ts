@@ -89,6 +89,80 @@ export interface Volume {
   chapters: Chapter[];
 }
 
+// 提示词库：每本书专属的、可累积复用的写作偏好 / 调整方向集合。
+// 每次带方向的重新生成会自动记入，作者也可主动编辑；后续正文生成时一并参考。
+export type PromptSource =
+  | "manual" // 主动编辑
+  | "bible" // 来源于故事设定集重新生成
+  | "volumes" // 来源于分卷脉络重新生成
+  | "chapter-outline" // 来源于章节脉络重新生成
+  | "prose"; // 来源于正文重写
+
+export const PROMPT_SOURCE_LABEL: Record<PromptSource, string> = {
+  manual: "主动编辑",
+  bible: "来源于故事设定集",
+  volumes: "来源于分卷脉络",
+  "chapter-outline": "来源于章节脉络",
+  prose: "来源于正文",
+};
+
+export interface PromptEntry {
+  id: string;
+  source: PromptSource;
+  content: string; // 提示词 / 调整方向文本
+  note: string; // 上下文备注（如“第12章”），可空
+  enabled: boolean; // 是否在后续生成时参考
+  createdAt: number;
+}
+
+// 文风规则卡：由「拆书学文风」分析生成，可导出复用，也可注入某部作品的写作提示词。
+export interface StyleCard {
+  id: string;
+  sourceFileHash: string; // 源文件内容哈希（用于缓存去重）
+  sourceFileName: string;
+  createdAt: number;
+  styleName: string; // 风格名称（模型命名）
+  signature: string; // 模仿指南：一句可执行的风格复刻要点（综合各维度得出）
+  sentenceRhythm: { avgLength: string; pattern: string; examples: string[] };
+  vocabulary: { highFreqWords: string[]; register: string; forbiddenWords: string[] };
+  descriptionStrategy: { actionVsPsychology: string; sensoryPreference: string };
+  dialogueStyle: { colloquialScore: number; subtextDensity: string; tagHabit: string };
+  narrativeStructure: { perspective: string; timeline: string };
+  emotionalTone: { tone: string; expressionMode: string };
+  rhetoric: { preferredTypes: string[]; frequency: string; examples: string[] };
+}
+
+// 作品档案卡：由「拆书学设定」分析生成，抽取一本书的世界观/人物/主线剧情等，
+// 用于「二创开新书」：一键新建作品并把档案填入故事圣经与设定库。
+export interface ArchiveCharacter {
+  name: string;
+  role: string; // 主角 / 反派 / 重要配角 ...
+  aliases: string[]; // 别名/称号
+  profile: string; // 身份、性格、目标、关系
+}
+
+export interface ArchiveEntry {
+  name: string;
+  note: string; // 简介
+}
+
+export interface StoryArchive {
+  id: string;
+  sourceFileHash: string; // 源文件内容哈希（缓存去重）
+  sourceFileName: string;
+  createdAt: number;
+  title: string; // 推断的作品名
+  synopsis: string; // 整体剧情概述
+  worldbuilding: string; // 世界观设定
+  powerSystem: string; // 力量体系 / 世界规则
+  themes: string; // 核心主题与基调
+  styleHint: string; // 文风与叙事特色提示
+  characters: ArchiveCharacter[];
+  locations: ArchiveEntry[]; // 关键地点
+  factions: ArchiveEntry[]; // 势力
+  mainPlot: string[]; // 主线剧情脉络（按时序的关键事件）
+}
+
 export interface ProjectSetup {
   genre: string; // 题材，例如 "东方玄幻"
   premise: string; // 一句话灵感 / 核心设定
@@ -98,8 +172,11 @@ export interface ProjectSetup {
   targetWords: number; // 目标总字数
   wordsPerChapter: number; // 单章目标字数
   targetChapters: number; // 预设全书总章节数（0=依据目标字数自动规划）
+  targetVolumes: number; // 预设分卷数（脉络段数，0=自动推算）
   deAi: boolean; // 是否启用“去 AI 味”增强
   bannedList: string; // 负面清单：必须回避的词语 / 句式 / 桥段（换行分隔）
+  styleCard: StyleCard | null; // 已应用的文风规则卡（旧版单张，兼容保留；null=未应用）
+  styleCards: StyleCard[]; // 已应用的多张文风卡（多选，非空时优先于单张 styleCard）
   extra: string; // 其他要求
 }
 
@@ -122,6 +199,7 @@ export interface Project {
   volumes: Volume[];
   codex: CodexEntry[]; // 信息库 / 世界档案
   foreshadows: Foreshadow[]; // 伏笔线索表
+  prompts: PromptEntry[]; // 提示词库（写作偏好 / 历次调整方向）
   createdAt: number;
   updatedAt: number;
 }
@@ -153,8 +231,11 @@ export const DEFAULT_SETUP: ProjectSetup = {
   targetWords: 1_000_000,
   wordsPerChapter: 2500,
   targetChapters: 0,
+  targetVolumes: 0,
   deAi: true,
   bannedList: "",
+  styleCard: null,
+  styleCards: [],
   extra: "",
 };
 
@@ -169,15 +250,61 @@ export function emptyProject(id: string, title: string): Project {
     volumes: [],
     codex: [],
     foreshadows: [],
+    prompts: [],
     createdAt: now,
     updatedAt: now,
   };
+}
+
+// 生成正文时实际参考的文风卡集合：优先用多选的 styleCards，回退到旧版单张 styleCard。
+export function effectiveStyleCards(setup: ProjectSetup): StyleCard[] {
+  if (setup.styleCards && setup.styleCards.length) return setup.styleCards;
+  return setup.styleCard ? [setup.styleCard] : [];
 }
 
 export function countWords(text: string): number {
   if (!text) return 0;
   // 去掉空白后按字符计（中文以字计），近似字数统计
   return text.replace(/\s+/g, "").length;
+}
+
+// 提示词库：记录一条提示词。自动去重——同来源同内容不重复堆积，仅置顶并刷新时间。
+// 内容为空则原样返回（无方向的重新生成不产生条目）。返回新的 Project（纯函数）。
+export function recordPromptEntry(
+  project: Project,
+  source: PromptSource,
+  content: string,
+  note = ""
+): Project {
+  const text = (content || "").trim();
+  if (!text) return project;
+  const prompts = project.prompts || [];
+  const existing = prompts.find(
+    (p) => p.source === source && p.content.trim() === text
+  );
+  if (existing) {
+    return {
+      ...project,
+      prompts: [
+        { ...existing, note: note || existing.note, createdAt: Date.now() },
+        ...prompts.filter((p) => p.id !== existing.id),
+      ],
+    };
+  }
+  const entry: PromptEntry = {
+    id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+    source,
+    content: text,
+    note,
+    enabled: true,
+    createdAt: Date.now(),
+  };
+  return { ...project, prompts: [entry, ...prompts] };
+}
+
+// 后续生成时应参考的提示词（已启用且非空）。
+export function enabledPrompts(project: Project): PromptEntry[] {
+  return (project.prompts || []).filter((p) => p.enabled && p.content.trim());
 }
 
 export function projectStats(p: Project) {

@@ -1,0 +1,66 @@
+{
+  "id": "mrxlhpt3t221",
+  "sourceFileHash": "86de68f7",
+  "sourceFileName": "朔与茉莉。1.txt",
+  "createdAt": 1784816215527,
+  "styleName": "轻小说吐槽叙事风",
+  "signature": "以吐槽和内心戏为主轴，大量使用短句、对话和口语化表达，营造轻松幽默的叙事节奏；注重通过动作细节和感官描写展现角色互动，辅以夸张的心理反应。",
+  "sentenceRhythm": {
+    "avgLength": "18字",
+    "pattern": "以短句为主，频繁使用逗号碎句和感叹号、问号、破折号，形成急促节奏；常见重复短句堆叠（如“Excellent、Excellent、Excellent——！Hoo——！”），并用省略号模拟停顿。",
+    "examples": [
+      "「Excellent、Excellent、Excellent——！Hoo——！」",
+      "虽然每天看都很难有真实感，但重新比较过后，从高中时期到现在累积的岁月，确实刻画在我的身体上。",
+      "明明是自己问的问题，我却莫名觉得难为情，为了掩饰，我将最后剩下的茶一饮而尽。"
+    ]
+  },
+  "vocabulary": {
+    "highFreqWords": [
+      "知道",
+      "写",
+      "可爱",
+      "处男",
+      "想",
+      "笑",
+      "觉得",
+      "开心",
+      "厉害",
+      "有趣"
+    ],
+    "register": "口语化为主，夹杂少量书面语和网络用语，整体偏向轻小说式的夸张吐槽风格",
+    "forbiddenWords": []
+  },
+  "descriptionStrategy": {
+    "actionVsPsychology": "动作:心理 = 4:6，心理描写略多，常通过内心独白直接展示情绪",
+    "sensoryPreference": "偏好视觉（如“樱色的信纸”“迷你裙女仆装”）和听觉（如“规律的滴答声”“吞咽口水的声音”），偶有触觉（如“搓了搓手臂”）"
+  },
+  "dialogueStyle": {
+    "colloquialScore": 8,
+    "subtextDensity": "高",
+    "tagHabit": "多用动词标签（如“大叫”“低喃”“傻眼地叹了口气”），常省略标签或用动作替代，对话内容直白夸张"
+  },
+  "narrativeStructure": {
+    "perspective": "第一人称",
+    "timeline": "线性叙事为主，穿插少量回忆（如高中毕业纪念册）"
+  },
+  "emotionalTone": {
+    "tone": "自嘲式欢快，夹杂沮丧与亢奋的快速切换",
+    "expressionMode": "展示"
+  },
+  "rhetoric": {
+    "preferredTypes": [
+      "比喻",
+      "拟人",
+      "夸张",
+      "拟声",
+      "设问",
+      "反问"
+    ],
+    "frequency": "中频",
+    "examples": [
+      "宛如奇迹的日子",
+      "在那片黑暗之中，我们是不知道时间也不知道方位，没有指针，只能不断徘徊的旅人。",
+      "就像春天的空气一样温暖又圆润。"
+    ]
+  }
+}

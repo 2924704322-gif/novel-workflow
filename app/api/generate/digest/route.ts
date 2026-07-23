@@ -8,17 +8,18 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 // POST /api/generate/digest
-// body: { config, chapter, content, knownCodexNames, openForeshadows }
+// body: { config, chapter, content, knownCodexNames, openForeshadows, globalNo? }
 // Reads a finished chapter and returns { summary, codex[], foreshadows[] } JSON
 // used to keep the codex + foreshadow tables current.
 export async function POST(req: NextRequest) {
-  const { config, chapter, content, knownCodexNames, openForeshadows } =
+  const { config, chapter, content, knownCodexNames, openForeshadows, globalNo } =
     (await req.json()) as {
       config: ApiConfig;
       chapter: Chapter;
       content: string;
       knownCodexNames: string[];
       openForeshadows: string[];
+      globalNo?: number;
     };
 
   const err = validateConfig(config);
@@ -31,7 +32,8 @@ export async function POST(req: NextRequest) {
         chapter,
         content || "",
         knownCodexNames || [],
-        openForeshadows || []
+        openForeshadows || [],
+        globalNo
       ),
       { maxTokens: 2048 }
     );
