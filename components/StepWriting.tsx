@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   loadConfig,
   loadReconcilePref,
+  generateRecap,
   requestReconcile,
   saveReconcilePref,
   streamPost,
@@ -24,6 +25,10 @@ import {
   applyDigest,
   buildChapterContext,
   flattenChapters,
+  priorVolumeArcs,
+  setStorySoFar,
+  setVolumeArc,
+  volumeChapterDigests,
   type ChapterDigest,
 } from "@/lib/retrieval";
 import {
@@ -93,6 +98,9 @@ export default function StepWriting({
   });
   // 续写前先提炼前几章大致内容（导入的旧章往往没有摘要），生成时给足“前情”。
   const [preparing, setPreparing] = useState(false);
+  // 分层滚动前情（卷级/全书梗概）刷新中；归档发现的连贯性冲突提醒。
+  const [recapping, setRecapping] = useState(false);
+  const [conflicts, setConflicts] = useState<string[]>([]);
   const [editingOutline, setEditingOutline] = useState(false);
   // 重写本章方向对话框：点「重写本章」先问方向，确认后再带方向重写。
   const [showRegen, setShowRegen] = useState(false);
@@ -188,7 +196,10 @@ export default function StepWriting({
               chapter: f.chapter,
               globalNo: f.global,
               content: f.chapter.content,
-              knownCodexNames: (updated.codex || []).map((e) => e.name),
+              knownCodex: (updated.codex || []).map((e) => ({
+                name: e.name,
+                status: e.status,
+              })),
               openForeshadows: activeForeshadows(updated.foreshadows || []).map(
                 (x) => x.title
               ),
@@ -270,6 +281,12 @@ export default function StepWriting({
       const fresh = freshFlat.find((f) => f.chapter.id === target.chapter.id);
       const targetChapter = fresh?.chapter ?? target.chapter;
       const prevChapter = fresh?.prev ?? target.prev;
+      // 阅读顺序的下一章（天然跨卷：下一卷首章），作为止步线传入。
+      const targetIdx = freshFlat.findIndex(
+        (f) => f.chapter.id === target.chapter.id
+      );
+      const nextChapter =
+        targetIdx >= 0 ? freshFlat[targetIdx + 1]?.chapter ?? null : null;
       const volume =
         proj.volumes.find((v) =>
           v.chapters.some((c) => c.id === target.chapter.id)
@@ -287,6 +304,7 @@ export default function StepWriting({
           globalNo: target.global,
           direction,
           prompts: enabledPrompts(proj),
+          nextChapter,
         },
         (t) => {
           setContent(t);
@@ -326,6 +344,10 @@ export default function StepWriting({
         } finally {
           setDigesting(false);
         }
+        // 归档发现的连贯性冲突：提醒作者复核（不自动改写正文）。
+        if (digest?.conflicts?.length) setConflicts(digest.conflicts);
+        // 分层滚动前情：归档后刷新卷级/全书梗概，弥合中期记忆断层。
+        if (digest) updated = await refreshRecaps(updated, target.chapter.id);
       }
       // 重写已有正文：对本章及之后的脉络/摘要/分卷梳理一致性（不改正文）。
       if (wasRewrite) {
@@ -409,7 +431,10 @@ export default function StepWriting({
           chapter,
           globalNo,
           content: text,
-          knownCodexNames: (baseProject.codex || []).map((e) => e.name),
+          knownCodex: (baseProject.codex || []).map((e) => ({
+            name: e.name,
+            status: e.status,
+          })),
           openForeshadows: activeForeshadows(baseProject.foreshadows || []).map(
             (f) => f.title
           ),
@@ -432,10 +457,92 @@ export default function StepWriting({
       if (data) {
         patch((p) => applyDigest(p, chapter.id, data));
         await flush();
+        if (data.conflicts?.length) setConflicts(data.conflicts);
       }
     } finally {
       setDigesting(false);
     }
+  }
+
+  // Tiered rolling recap (RAPTOR-style): after a chapter is archived, refresh the
+  // current volume's arc summary; on a volume boundary (or when forced) also
+  // refresh the whole-book "story so far". This bridges the gap between the
+  // static bible and recent chapters so mid/late chapters keep long-range plot
+  // in view. Best-effort: patches state, returns the updated project, and never
+  // blocks writing on failure.
+  async function refreshRecaps(
+    proj: Project,
+    chapterId: string,
+    force = false
+  ): Promise<Project> {
+    const cfg = loadConfig();
+    if (!cfg.apiKey || !proj.bible) return proj;
+    const bible = proj.bible;
+    const vol = proj.volumes.find((v) =>
+      v.chapters.some((c) => c.id === chapterId)
+    );
+    if (!vol) return proj;
+    const isLast = vol.chapters[vol.chapters.length - 1]?.id === chapterId;
+    const sums = volumeChapterDigests(proj, vol.id);
+    // 卷级摘要：卷末必刷；卷中每累积数章刷新一次，避免每章都调用模型。
+    const shouldVolume = force
+      ? sums.length >= 1
+      : sums.length >= 2 && (isLast || sums.length % 3 === 0);
+    let updated = proj;
+    setRecapping(true);
+    try {
+      if (shouldVolume) {
+        const text = await generateRecap({
+          config: cfg,
+          mode: "volume",
+          volume: vol,
+          chapterSummaries: sums,
+          prevArc: vol.arcSummary,
+        });
+        if (text) {
+          updated = setVolumeArc(updated, vol.id, text);
+          patch((p) => setVolumeArc(p, vol.id, text));
+          await flush();
+        }
+      }
+      // 全书梗概：卷末（或手动强制）时综合“截至本卷”的各卷概述，供下一卷回顾。
+      if (isLast || force) {
+        const vi = updated.volumes.findIndex((v) => v.id === vol.id);
+        const nextVol = updated.volumes[vi + 1];
+        const arcs = nextVol
+          ? priorVolumeArcs(updated, nextVol.id)
+          : updated.volumes
+              .map((v) => ({
+                index: v.index,
+                title: v.title,
+                arc: (v.arcSummary || "").trim() || (v.summary || "").trim(),
+              }))
+              .filter((a) => a.arc);
+        if (arcs.length) {
+          const text = await generateRecap({
+            config: cfg,
+            mode: "book",
+            bible,
+            priorArcs: arcs,
+          });
+          if (text) {
+            updated = setStorySoFar(updated, text);
+            patch((p) => setStorySoFar(p, text));
+            await flush();
+          }
+        }
+      }
+    } finally {
+      setRecapping(false);
+    }
+    return updated;
+  }
+
+  // Manual 「梳理前情」: force-recompute the current volume arc + whole-book recap
+  // for the selected chapter's volume.
+  async function manualRecap() {
+    if (!current) return;
+    await refreshRecaps(project, current.chapter.id, true);
   }
 
   // Pure: return a project with the chapter's prose/body set (mirrors
@@ -667,12 +774,46 @@ export default function StepWriting({
           {preparing && (
             <span className="chip chip--cinnabar">提炼前情中…</span>
           )}
+          {recapping && (
+            <span className="chip chip--cinnabar">梳理前情中…</span>
+          )}
         </div>
 
         <ChangeSummary
           state={reconcile}
           onDismiss={() => setReconcile({ busy: false, result: null })}
         />
+
+        {conflicts.length > 0 && (
+          <div
+            className="chip chip--cinnabar"
+            style={{
+              margin: "0 0 14px",
+              display: "block",
+              padding: "10px 12px",
+              lineHeight: 1.6,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+              <b style={{ color: "var(--fg)" }}>连贯性提醒</b>
+              <span className="faint" style={{ fontSize: 12, flex: 1 }}>
+                归档时发现本章可能与前文设定/状态存在矛盾，请复核（不会自动改写正文）。
+              </span>
+              <button
+                className="btn btn--ghost btn--sm"
+                style={{ padding: "2px 10px", flexShrink: 0 }}
+                onClick={() => setConflicts([])}
+              >
+                知道了
+              </button>
+            </div>
+            <ul style={{ margin: "6px 0 0", paddingLeft: 20 }}>
+              {conflicts.map((c, i) => (
+                <li key={i}>{c}</li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {mode === "codex" ? (
           <CodexPanel project={project} patch={patch} />
@@ -732,6 +873,14 @@ export default function StepWriting({
                         {digesting ? "归档中…" : "归档本章"}
                       </button>
                     )}
+                    <button
+                      className="btn btn--sm"
+                      onClick={manualRecap}
+                      disabled={recapping}
+                      title="重算本卷“至今概述”与全书“前情梗概”，用于弥合中后期的长线记忆（依赖已归档章节摘要）"
+                    >
+                      {recapping ? "梳理中…" : "梳理前情"}
+                    </button>
                     <button
                       className="btn btn--primary btn--sm"
                       onClick={() => {

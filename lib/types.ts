@@ -51,13 +51,23 @@ export const CODEX_CATEGORIES: CodexCategory[] = [
   "其他",
 ];
 
+// 设定条目的一次状态变更（章节锚定），构成实体的“状态时间线”，
+// 让百万字里的人物/势力演变有据可查，避免“死而复生”“位置回退”等记忆错乱。
+export interface CodexEvent {
+  chapter: number; // 发生变化的全局章号
+  note: string; // 该章此实体发生的关键变化（一句话）
+}
+
 export interface CodexEntry {
   id: string;
   category: CodexCategory;
   name: string; // 主名称
   aliases: string[]; // 别名/绰号（用于检索命中）
-  summary: string; // 当前状态与关键信息
+  summary: string; // 当前状态与关键信息（最新快照）
   updatedAtChapter: number; // 最后更新于第几章（全局序号，0=大纲阶段）
+  status?: string; // 当前存续状态（人物/势力常用，如 存活/死亡/失踪/未知），用于硬约束
+  pinned?: boolean; // 核心条目：检索时恒定注入（主角/关键设定），不受子串命中限制
+  events?: CodexEvent[]; // 状态变化时间线（按章追加）
 }
 
 // 伏笔线索：埋设→强化→回收的全生命周期跟踪。
@@ -87,6 +97,7 @@ export interface Volume {
   summary: string; // 本卷主线概述
   plannedChapters: number; // 大纲阶段规划的章节数（用于尚未展开时的目标）
   chapters: Chapter[];
+  arcSummary?: string; // 本卷已完成部分的滚动摘要（分层记忆的卷级）
 }
 
 // 提示词库：每本书专属的、可累积复用的写作偏好 / 调整方向集合。
@@ -200,6 +211,7 @@ export interface Project {
   codex: CodexEntry[]; // 信息库 / 世界档案
   foreshadows: Foreshadow[]; // 伏笔线索表
   prompts: PromptEntry[]; // 提示词库（写作偏好 / 历次调整方向）
+  storySoFar?: string; // 已完成分卷的全书故事梗概（分层记忆顶层，弥合中期断层）
   createdAt: number;
   updatedAt: number;
 }

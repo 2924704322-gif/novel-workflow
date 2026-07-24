@@ -37,29 +37,52 @@ export function flattenChapters(project: Project): FlatChapter[] {
 }
 
 /**
- * Rank codex entries by how strongly they match the given text (a chapter's
- * title + synopsis, optionally plus recent summaries). An entry matches when its
- * name or any alias appears as a substring; more hits rank higher.
+ * Rank codex entries by how relevant they are to the chapter being written,
+ * blending three signals (inspired by generative-agents retrieval):
+ *   - relevance: name/alias appears as a substring of the query text;
+ *   - recency:   the entry was updated in a nearby recent chapter;
+ *   - importance: characters/factions weigh a little more.
+ * Core entries (pinned, or whose name is in `coreNames`, e.g. the bible's main
+ * cast) are ALWAYS injected regardless of substring match — this is the single
+ * biggest fix for protagonists silently dropping out of context mid-book.
  */
 export function selectRelevantCodex(
   codex: CodexEntry[],
   text: string,
-  limit = 12
+  targetGlobal = 0,
+  coreNames: string[] = [],
+  limit = 14
 ): CodexEntry[] {
-  if (!codex.length || !text) return [];
-  const hay = text;
+  if (!codex.length) return [];
+  const hay = text || "";
+  const core = new Set(coreNames.filter(Boolean));
+  const always: CodexEntry[] = [];
   const scored: { entry: CodexEntry; score: number }[] = [];
   for (const e of codex) {
+    const isCore = Boolean(e.pinned) || core.has(e.name);
+    if (isCore) {
+      always.push(e);
+      continue;
+    }
     const keys = [e.name, ...(e.aliases || [])].filter(Boolean);
-    let score = 0;
+    let rel = 0;
     for (const k of keys) {
       if (k.length < 1) continue;
-      if (hay.includes(k)) score += k === e.name ? 2 : 1;
+      if (hay.includes(k)) rel += k === e.name ? 2 : 1;
     }
-    if (score > 0) scored.push({ entry: e, score });
+    if (rel <= 0) continue;
+    let score = rel;
+    if (targetGlobal && e.updatedAtChapter) {
+      const gap = targetGlobal - e.updatedAtChapter;
+      if (gap >= 0 && gap <= 10) score += 2;
+      else if (gap > 0 && gap <= 25) score += 1;
+    }
+    if (e.category === "人物" || e.category === "势力") score += 1;
+    scored.push({ entry: e, score });
   }
   scored.sort((a, b) => b.score - a.score);
-  return scored.slice(0, limit).map((s) => s.entry);
+  const room = Math.max(0, limit - always.length);
+  return [...always, ...scored.slice(0, room).map((s) => s.entry)];
 }
 
 export interface RecentSummary {
@@ -104,11 +127,16 @@ export interface ChapterContext {
   codex: CodexEntry[];
   recent: RecentSummary[];
   foreshadows: Foreshadow[];
+  storySoFar?: string; // 已完成分卷的全书故事梗概（顶层）
+  volumeArc?: string; // 当前卷已完成部分的滚动摘要（中层）
 }
 
 /**
  * Assemble everything the chapter writer needs beyond the bible + previous
- * chapter tail: relevant codex facts, recent summaries, and open threads.
+ * chapter tail. Continuity is delivered in three tiers (RAPTOR-style graduated
+ * detail) so mid-book chapters stay anchored without dumping all history:
+ *   storySoFar (prior volumes) → volumeArc (this volume) → recent chapter
+ * summaries → relevant codex facts + open foreshadows.
  */
 export function buildChapterContext(
   project: Project,
@@ -127,10 +155,18 @@ export function buildChapterContext(
     ...recent.map((r) => r.summary),
   ].join("\n");
 
+  // Core cast from the bible is always injected so protagonists never drop out.
+  const coreNames = (project.bible?.characters || [])
+    .map((c) => c.name)
+    .filter(Boolean);
+  const currentVolume = target?.volume ?? null;
+
   return {
-    codex: selectRelevantCodex(project.codex, haystack, 12),
+    codex: selectRelevantCodex(project.codex, haystack, targetGlobal, coreNames, 14),
     recent,
     foreshadows: activeForeshadows(project.foreshadows),
+    storySoFar: (project.storySoFar || "").trim() || undefined,
+    volumeArc: (currentVolume?.arcSummary || "").trim() || undefined,
   };
 }
 
@@ -147,6 +183,8 @@ export interface ChapterDigest {
     name?: string;
     aliases?: string[];
     summary?: string;
+    status?: string; // 该实体截至本章的存续状态（如 存活/死亡/失踪）
+    event?: string; // 本章该实体发生的关键变化（计入状态时间线）
   }[];
   foreshadows?: {
     title?: string;
@@ -155,6 +193,7 @@ export interface ChapterDigest {
     payoffPlan?: string;
     action?: "plant" | "reinforce" | "pay" | "abandon";
   }[];
+  conflicts?: string[]; // 本章与既有设定/状态的潜在矛盾（仅提示作者，不自动改写）
 }
 
 function rid(): string {
@@ -192,19 +231,29 @@ export function applyDigest(
     ),
   }));
 
-  // 2) codex merge by name
+  // 2) codex merge by name; keep latest summary, append state to timeline
   const codex: CodexEntry[] = project.codex.map((e) => ({ ...e }));
   for (const u of digest.codex || []) {
     const name = (u.name || "").trim();
     if (!name) continue;
+    const ev = (u.event || "").trim();
+    const status = (u.status || "").trim();
     const existing = codex.find((e) => e.name === name);
     if (existing) {
       if (u.summary) existing.summary = u.summary;
       if (u.category) existing.category = normalizeCategory(u.category);
+      if (status) existing.status = status;
       if (u.aliases?.length) {
         existing.aliases = Array.from(
           new Set([...(existing.aliases || []), ...u.aliases])
         );
+      }
+      if (ev) {
+        const events = existing.events ? [...existing.events] : [];
+        if (!events.some((x) => x.chapter === g && x.note === ev)) {
+          events.push({ chapter: g, note: ev });
+        }
+        existing.events = events;
       }
       existing.updatedAtChapter = g;
     } else {
@@ -215,6 +264,8 @@ export function applyDigest(
         aliases: (u.aliases || []).filter(Boolean),
         summary: u.summary || "",
         updatedAtChapter: g,
+        status: status || undefined,
+        events: ev ? [{ chapter: g, note: ev }] : [],
       });
     }
   }
@@ -255,4 +306,56 @@ export function applyDigest(
   }
 
   return { ...project, volumes, codex, foreshadows };
+}
+
+// ---- Hierarchical rolling summaries (tiered memory, RAPTOR-style) ----
+
+/** All finished-chapter summaries within one volume, in reading order. */
+export function volumeChapterDigests(
+  project: Project,
+  volumeId: string
+): RecentSummary[] {
+  return flattenChapters(project)
+    .filter((f) => f.volume.id === volumeId && f.chapter.summary)
+    .map((f) => ({
+      global: f.global,
+      title: f.chapter.title,
+      summary: f.chapter.summary,
+    }));
+}
+
+/**
+ * Arc summaries (fallback: planned summary) of every volume BEFORE the given
+ * one — the raw material for the global “story so far” recap.
+ */
+export function priorVolumeArcs(
+  project: Project,
+  currentVolumeId: string
+): { index: number; title: string; arc: string }[] {
+  const out: { index: number; title: string; arc: string }[] = [];
+  for (const v of project.volumes) {
+    if (v.id === currentVolumeId) break;
+    const arc = (v.arcSummary || "").trim() || (v.summary || "").trim();
+    if (arc) out.push({ index: v.index, title: v.title, arc });
+  }
+  return out;
+}
+
+/** Write a volume's rolling arc summary. Pure — returns a new Project. */
+export function setVolumeArc(
+  project: Project,
+  volumeId: string,
+  arc: string
+): Project {
+  return {
+    ...project,
+    volumes: project.volumes.map((v) =>
+      v.id === volumeId ? { ...v, arcSummary: arc } : v
+    ),
+  };
+}
+
+/** Write the global “story so far” recap. Pure — returns a new Project. */
+export function setStorySoFar(project: Project, text: string): Project {
+  return { ...project, storySoFar: text };
 }

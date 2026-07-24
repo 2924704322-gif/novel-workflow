@@ -2,13 +2,17 @@ import { promises as fs } from "fs";
 import path from "path";
 import { DEFAULT_SETUP, type Project, type StyleCard, type StoryArchive } from "./types";
 
-// Projects persist as one JSON file each under data/projects/.
+// Projects persist as one JSON file each under <root>/projects/.
 // This keeps a novel's data durable across restarts for local use.
-const DATA_DIR = path.join(process.cwd(), "data", "projects");
-// Style cards (拆书学文风) cache under data/styles/, keyed by source file hash.
-const STYLE_DIR = path.join(process.cwd(), "data", "styles");
-// Story archives (拆书学设定) cache under data/archives/, keyed by source file hash.
-const ARCHIVE_DIR = path.join(process.cwd(), "data", "archives");
+// The root defaults to <cwd>/data for `next dev`/`next start`, but the
+// packaged desktop app (Electron) sets NOVEL_DATA_ROOT to a user-writable
+// directory because the install dir is typically read-only.
+const ROOT = process.env.NOVEL_DATA_ROOT || path.join(process.cwd(), "data");
+const DATA_DIR = path.join(ROOT, "projects");
+// Style cards (拆书学文风) cache under <root>/styles/, keyed by source file hash.
+const STYLE_DIR = path.join(ROOT, "styles");
+// Story archives (拆书学设定) cache under <root>/archives/, keyed by source file hash.
+const ARCHIVE_DIR = path.join(ROOT, "archives");
 
 // Backfill fields added in later versions so projects saved by older builds
 // keep working without a manual migration step.
@@ -20,8 +24,14 @@ function normalizeProject(p: Project): Project {
   // projectStats / flattenChapters 直接遍历时崩溃白屏。
   if (!Array.isArray(p.volumes)) p.volumes = [];
   if (!Array.isArray(p.prompts)) p.prompts = [];
+  if (typeof p.storySoFar !== "string") p.storySoFar = "";
+  // 设定库新增的状态时间线字段：旧条目回填空事件数组，避免遍历时报错。
+  for (const e of p.codex) {
+    if (!Array.isArray(e.events)) e.events = [];
+  }
   for (const v of p.volumes) {
     if (!Array.isArray(v.chapters)) v.chapters = [];
+    if (typeof v.arcSummary !== "string") v.arcSummary = "";
     for (const c of v.chapters) {
       if (typeof c.summary !== "string") c.summary = "";
     }

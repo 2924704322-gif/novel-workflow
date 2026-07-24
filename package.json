@@ -1,12 +1,20 @@
 {
   "name": "novel-workflow",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
+  "description": "墨章 Novel Atelier — 本地优先的长篇小说 AI 创作工作流桌面应用",
+  "author": "Novel Atelier",
+  "license": "MIT",
+  "main": "electron/main.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "electron:dev": "concurrently -k \"next dev\" \"cross-env NODE_ENV=development wait-on http://localhost:3000 && electron electron/main.js\"",
+    "prepare:standalone": "node scripts/prepare-standalone.mjs",
+    "app:build": "next build && npm run prepare:standalone && electron-builder",
+    "app:build:win": "cross-env ELECTRON_CACHE=E:/.ecache ELECTRON_BUILDER_CACHE=E:/.ecache npm run app:build"
   },
   "dependencies": {
     "next": "^15.5.4",
@@ -18,7 +26,39 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^9.1.0",
+    "cross-env": "^7.0.3",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
     "tailwindcss": "^4.0.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "com.novelatelier.app",
+    "productName": "墨章 Novel Atelier",
+    "asar": false,
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**",
+      ".next/standalone/**"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "墨章",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico"
+    }
   }
 }

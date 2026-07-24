@@ -7,12 +7,14 @@ import type {
   StoryArchive,
   StoryBible,
   StyleCard,
+  Volume,
 } from "./types";
 import type {
   ReconcileChange,
   ReconcilePayload,
   ReconcileResult,
 } from "./reconcile";
+import type { RecentSummary } from "./retrieval";
 
 const CONFIG_KEY = "novel-workflow.apiConfig"; // legacy single-config key (auto-migrated)
 const PROFILES_KEY = "novel-workflow.apiProfiles";
@@ -292,6 +294,43 @@ export async function requestReconcile(body: {
     });
     if (!res.ok) return null;
     return (await res.json()) as ReconcileResult;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Ask the server to (re)compute a rolling recap. Two modes:
+ *   volume -> condense one volume's chapter summaries into an arc summary;
+ *   book   -> synthesize finished volumes' arcs into a whole-book "story so far".
+ * Returns the recap prose, or null on any failure (callers skip silently).
+ */
+export async function generateRecap(
+  body:
+    | {
+        config: ApiConfig;
+        mode: "volume";
+        volume: Volume;
+        chapterSummaries: RecentSummary[];
+        prevArc?: string;
+      }
+    | {
+        config: ApiConfig;
+        mode: "book";
+        bible: StoryBible;
+        priorArcs: { index: number; title: string; arc: string }[];
+      }
+): Promise<string | null> {
+  try {
+    const res = await fetch("/api/generate/recap", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { text?: string };
+    const text = (data.text || "").trim();
+    return text || null;
   } catch {
     return null;
   }

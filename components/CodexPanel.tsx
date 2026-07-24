@@ -56,7 +56,7 @@ export function CodexPanel({
         <div>
           <h3 style={{ fontSize: 17 }}>设定库 · 世界档案</h3>
           <p className="faint" style={{ fontSize: 12, marginTop: 2 }}>
-            写作时按本章细纲自动检索相关条目喂给模型，保持跨卷一致。可手动增改。
+            写作时按本章细纲自动检索相关条目喂给模型，保持跨卷一致。可标注存续状态、置顶核心条目。
           </p>
         </div>
         <span className="chip">{codex.length} 条</span>
@@ -134,6 +134,63 @@ export function CodexPanel({
               placeholder="当前状态与关键信息"
               onChange={(ev) => update(e.id, { summary: ev.target.value })}
             />
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr auto",
+                gap: 8,
+                marginTop: 8,
+                alignItems: "center",
+              }}
+            >
+              <input
+                className="input"
+                style={{ fontSize: 12.5 }}
+                value={e.status || ""}
+                placeholder="存续状态：存活 / 死亡 / 失踪 / 重伤…（死亡等状态写作时不得擅自推翻）"
+                onChange={(ev) => update(e.id, { status: ev.target.value })}
+              />
+              <label
+                className="faint"
+                style={{
+                  fontSize: 12,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+                title="核心条目：写作时恒定注入模型（主角/关键设定），不受本章是否点名限制"
+              >
+                <input
+                  type="checkbox"
+                  checked={Boolean(e.pinned)}
+                  onChange={(ev) => update(e.id, { pinned: ev.target.checked })}
+                />
+                核心·恒定注入
+              </label>
+            </div>
+            {(e.events || []).length > 0 && (
+              <div
+                className="faint"
+                style={{
+                  marginTop: 8,
+                  fontSize: 12,
+                  lineHeight: 1.6,
+                  borderTop: "1px dashed var(--ink-600, rgba(255,255,255,0.1))",
+                  paddingTop: 6,
+                }}
+              >
+                <b style={{ color: "var(--fg-dim)" }}>状态历程</b>
+                <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+                  {(e.events || []).map((v, i) => (
+                    <li key={i}>
+                      第{v.chapter}章：{v.note}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         ))}
       </div>

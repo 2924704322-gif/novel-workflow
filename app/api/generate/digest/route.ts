@@ -8,16 +8,16 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 // POST /api/generate/digest
-// body: { config, chapter, content, knownCodexNames, openForeshadows, globalNo? }
+// body: { config, chapter, content, knownCodex, openForeshadows, globalNo? }
 // Reads a finished chapter and returns { summary, codex[], foreshadows[] } JSON
 // used to keep the codex + foreshadow tables current.
 export async function POST(req: NextRequest) {
-  const { config, chapter, content, knownCodexNames, openForeshadows, globalNo } =
+  const { config, chapter, content, knownCodex, openForeshadows, globalNo } =
     (await req.json()) as {
       config: ApiConfig;
       chapter: Chapter;
       content: string;
-      knownCodexNames: string[];
+      knownCodex: { name: string; status?: string }[];
       openForeshadows: string[];
       globalNo?: number;
     };
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
       buildDigestPrompt(
         chapter,
         content || "",
-        knownCodexNames || [],
+        knownCodex || [],
         openForeshadows || [],
         globalNo
       ),

@@ -1,12 +1,20 @@
-node_modules
-.next
-out
-build
+# dependencies
+/node_modules
+
+# next.js build output
+/.next
+/out
+
+# electron-builder output
+/dist
+
+# local app data (novels + style/archive caches)
+/data
+
+# logs & os junk
+*.log
 .DS_Store
-*.pem
-npm-debug.log*
-.env*
-!.env.example
-data/projects/*.json
-!data/projects/.gitkeep
-next-env.d.ts
+Thumbs.db
+
+# local env files
+.env*.local

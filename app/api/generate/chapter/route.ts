@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 600;
 
 // POST /api/generate/chapter
-// body: { config, setup, bible, volume, chapter, prevChapter, ctx?, globalNo?, direction?, prompts? }
+// body: { config, setup, bible, volume, chapter, prevChapter, ctx?, globalNo?, direction?, prompts?, nextChapter? }
 // Streams the chapter prose directly.
 export async function POST(req: NextRequest) {
   const {
@@ -29,6 +29,7 @@ export async function POST(req: NextRequest) {
     globalNo,
     direction,
     prompts,
+    nextChapter,
   } = (await req.json()) as {
     config: ApiConfig;
     setup: ProjectSetup;
@@ -40,6 +41,7 @@ export async function POST(req: NextRequest) {
     globalNo?: number;
     direction?: string;
     prompts?: PromptEntry[];
+    nextChapter?: Chapter | null;
   };
 
   const err = validateConfig(config);
@@ -57,7 +59,8 @@ export async function POST(req: NextRequest) {
         ctx,
         globalNo,
         direction,
-        prompts
+        prompts,
+        nextChapter
       ),
       { maxTokens: 8192 }
     );

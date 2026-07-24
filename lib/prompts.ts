@@ -165,10 +165,29 @@ function codexBlock(codex: CodexEntry[]): string {
   const lines = codex
     .map((e) => {
       const alias = e.aliases?.length ? `（又称：${e.aliases.join("、")}）` : "";
-      return `- [${e.category}] ${e.name}${alias}：${e.summary}`;
+      const status = e.status ? `【${e.status}】` : "";
+      // 附带最近几条状态变化，让模型看到实体的“演变轨迹”而非只有最新快照。
+      const evs = (e.events || []).slice(-3);
+      const timeline = evs.length
+        ? `\n    历程：${evs.map((v) => `第${v.chapter}章 ${v.note}`).join("；")}`
+        : "";
+      return `- [${e.category}]${status} ${e.name}${alias}：${e.summary}${timeline}`;
     })
     .join("\n");
-  return `【相关设定档案（必须与之保持一致，不得自相矛盾）】\n${lines}`;
+  return `【相关设定档案（必须与之保持一致，不得自相矛盾；已标注死亡/失踪等状态的不得擅自推翻）】\n${lines}`;
+}
+
+// 分层滚动前情：全书故事梗概（已完成分卷）+ 本卷至今概述，
+// 弥合“故事圣经↔近几章”之间的中期断层，避免中后期遗忘长线情节。
+function recapBlock(storySoFar?: string, volumeArc?: string): string {
+  const parts: string[] = [];
+  if (storySoFar && storySoFar.trim()) {
+    parts.push(`【先前各卷故事梗概】\n${storySoFar.trim()}`);
+  }
+  if (volumeArc && volumeArc.trim()) {
+    parts.push(`【本卷至今概述】\n${volumeArc.trim()}`);
+  }
+  return parts.join("\n\n");
 }
 
 // 最近数章的摘要，形成滞后于上一章结尾的“前情回顾”。
@@ -178,6 +197,20 @@ function recentBlock(recent: RecentSummary[]): string {
     .map((r) => `- 第${r.global}章「${r.title}」：${r.summary}`)
     .join("\n");
   return `【前情回顾（近几章摘要）】\n${lines}`;
+}
+
+// 下一章边界·止步线：把下一章细纲作为负向约束注入，给模型一个明确的
+// “到此为止”锚点，避免本章正文提前展开后续章节的情节而“串章”。
+function nextChapterBoundaryBlock(
+  nextChapter: Chapter | null | undefined,
+  nextGlobalNo?: number
+): string {
+  const syn = nextChapter?.synopsis?.trim();
+  if (!nextChapter || !syn) return "";
+  const no = nextGlobalNo ? `第${nextGlobalNo}章` : "下一章";
+  return `【下一章边界·止步线（本章严禁展开以下内容）】
+${no}「${nextChapter.title}」的细纲：${syn}
+（以上属于${no}的情节，本章不得提前叙写或展开其中的事件、场景与结局；至多在本章结尾用一两句话作为悬念或铺垫暗示，点到为止。）`;
 }
 
 // 待回收的伏笔，提醒作者有意识地铺垫与回收。
@@ -398,7 +431,8 @@ export function buildChapterPrompt(
   ctx?: ChapterContext,
   globalNo?: number,
   direction?: string,
-  promptLib?: PromptEntry[]
+  promptLib?: PromptEntry[],
+  nextChapter?: Chapter | null
 ): ChatMessage[] {
   const prevTail = prevChapter?.content
     ? prevChapter.content.slice(-1200)
@@ -411,6 +445,7 @@ export function buildChapterPrompt(
 
   const contextBlocks = ctx
     ? [
+        recapBlock(ctx.storySoFar, ctx.volumeArc),
         codexBlock(ctx.codex),
         recentBlock(ctx.recent),
         foreshadowBlock(ctx.foreshadows),
@@ -429,15 +464,19 @@ export function buildChapterPrompt(
     `【当前卷】${volume.title}\n本卷主线：${volume.summary}`,
     prevBlock,
     `【需要创作的本章】第${globalNo ?? chapter.index}章 ${chapter.title}\n本章细纲：${chapter.synopsis}`,
+    nextChapterBoundaryBlock(
+      nextChapter,
+      globalNo ? globalNo + 1 : undefined
+    ),
     style,
     deAi,
     promptLibraryBlock(promptLib),
     regenDirectionBlock(direction),
     `创作要求：
-1. 目标字数约 ${setup.wordsPerChapter} 字，请写足篇幅。
-2. 严格围绕本章细纲展开，推进而不是复述剧情；与前文自然衔接，与上述设定档案保持一致。
+1. 目标字数约 ${setup.wordsPerChapter} 字，请在本章细纲范围内写足；宁可放慢节奏、丰富场景/对话/细节与人物内心，也不要靠推进后续情节来凑字数。
+2. 严格且仅围绕本章细纲展开，本章只覆盖细纲所述事件，写到细纲收尾即止；不得提前叙写或展开后续章节才应发生的情节、场景或结局；若有下一章边界提示，务必在该边界前收束。推进而不是复述已有剧情，与前文自然衔接，与上述设定档案保持一致。
 3. 保持既定文风（${setup.style || bible.tone}），多用场景、对话与细节，少用空泛概述。
-4. 结尾留出承接下一章的余韵或悬念。
+4. 结尾就本章事件收束，可留一句承接下一章的钩子或余韵，但不得实际进入下一章情节。
 5. 只输出正文，分自然段，不要输出章节标题或任何说明文字。`,
   ]
     .filter(Boolean)
@@ -459,12 +498,14 @@ const SYSTEM_ARCHIVIST =
 export function buildDigestPrompt(
   chapter: Chapter,
   content: string,
-  knownCodexNames: string[],
+  knownCodex: { name: string; status?: string }[],
   openForeshadows: string[],
   globalNo?: number
 ): ChatMessage[] {
-  const known = knownCodexNames.length
-    ? knownCodexNames.join("、")
+  const known = knownCodex.length
+    ? knownCodex
+        .map((c) => (c.status ? `${c.name}（${c.status}）` : c.name))
+        .join("、")
     : "（暂无）";
   const open = openForeshadows.length
     ? openForeshadows.join("、")
@@ -475,7 +516,7 @@ export function buildDigestPrompt(
       role: "user",
       content: `下面是刚完成的「第${globalNo ?? chapter.index}章 ${chapter.title}」正文。请阅读后归档。
 
-已知设定条目（若本章涉及其状态变化，请在 codex 中用相同 name 更新）：${known}
+已知设定条目（括号内为当前状态；若本章使其状态变化，请在 codex 中用相同 name 更新）：${known}
 当前未回收的伏笔（若本章有强化或回收，请在 foreshadows 中用相同 title 更新）：${open}
 
 【正文】
@@ -485,18 +526,92 @@ ${content.slice(0, 12000)}
 {
   "summary": "本章精炼摘要（120字内：发生了什么、人物关系/状态变化、留下的悬念）",
   "codex": [
-    { "category": "人物/地点/物品/势力/设定/其他", "name": "名称", "aliases": ["别名"], "summary": "截至本章的关键信息与最新状态" }
+    { "category": "人物/地点/物品/势力/设定/其他", "name": "名称", "aliases": ["别名"], "summary": "截至本章的关键信息与最新状态", "status": "人物/势力的存续状态，如 存活/死亡/失踪/重伤（非人物可留空）", "event": "本章该实体发生的关键变化（一句话，无则留空）" }
   ],
   "foreshadows": [
     { "title": "伏笔简述", "detail": "具体线索", "action": "plant|reinforce|pay|abandon", "payoffPlan": "预期如何回收（可选）" }
-  ]
+  ],
+  "conflicts": ["若本章内容与上述已知设定/状态存在矛盾（如已死角色再次登场、位置/关系与前文不符），在此简要指出；无则留空数组"]
 }
 
 要求：
 1. 只登记真正重要、会影响后续连贯性的信息；琐碎细节不要入库。
-2. codex 中已存在的条目用同名覆盖更新；新人物/新设定才新增。
+2. codex 中已存在的条目用同名覆盖更新（包括 status）；新人物/新设定才新增。event 只填“本章”的新变化。
 3. action：plant=本章新埋伏笔，reinforce=强化已有伏笔，pay=回收，abandon=明确废弃。
-4. 只输出 JSON。`,
+4. conflicts 仅用于提醒作者，不要自行“修正”正文事实；如实抽取。
+5. 只输出 JSON。`,
+    },
+  ];
+}
+
+const SYSTEM_RECAP =
+  "你是一位长篇小说连载的剧情梳理编辑。你阅读若干章节摘要或分卷概述，把它们归纳为连贯、不遗漏关键线索的滚动前情，供作者在后续章节创作时快速回顾，避免中后期记忆错乱。你只输出归纳后的正文段落，不得输出 JSON、标题、Markdown 标记或任何解释说明。";
+
+/**
+ * Tier-2 memory: condense one volume's finished-chapter summaries into a rolling
+ * arc summary ("what has happened in this volume so far"). Optionally continues
+ * from a previous arc snapshot so the summary stays stable as chapters accrue.
+ */
+export function buildVolumeArcPrompt(
+  volume: Volume,
+  chapterSummaries: RecentSummary[],
+  prevArc?: string
+): ChatMessage[] {
+  const list = chapterSummaries.length
+    ? chapterSummaries
+        .map((r) => `- 第${r.global}章「${r.title}」：${r.summary}`)
+        .join("\n")
+    : "（本卷暂无已归档的章节摘要）";
+  const prev = (prevArc || "").trim()
+    ? `\n【本卷此前的概述（可参考并在其基础上更新）】\n${prevArc!.trim()}\n`
+    : "";
+  return [
+    { role: "system", content: SYSTEM_RECAP },
+    {
+      role: "user",
+      content: `请把【${volume.title}】截至目前的剧情归纳为一段“本卷至今概述”。
+本卷主线：${volume.summary || "（暂无）"}
+${prev}
+【本卷已完成章节摘要（按顺序）】
+${list}
+
+要求：
+1. 用 200-400 字，按时序讲清本卷已发生的关键事件、人物处境与状态变化、尚未收束的悬念。
+2. 覆盖全过程，不要只写开头或结尾；合并琐碎细节，突出影响后续的主线。
+3. 只输出这段概述正文，不要输出标题、列表符号或任何说明文字。`,
+    },
+  ];
+}
+
+/**
+ * Tier-1 memory: synthesize the arc summaries of all finished volumes into a
+ * whole-book "story so far" recap, bridging the gap between the static bible and
+ * the current volume so long-range plot lines are not forgotten mid-book.
+ */
+export function buildStorySoFarPrompt(
+  bible: StoryBible,
+  priorArcs: { index: number; title: string; arc: string }[]
+): ChatMessage[] {
+  const list = priorArcs.length
+    ? priorArcs
+        .map((v) => `第${v.index}卷「${v.title}」：${v.arc}`)
+        .join("\n\n")
+    : "（暂无已完成的分卷）";
+  return [
+    { role: "system", content: SYSTEM_RECAP },
+    {
+      role: "user",
+      content: `以下是这部小说各已完成分卷的概述。请综合为一段贯通全书的“先前各卷故事梗概”，供作者创作后续卷时回顾。
+
+【作品基调】${bible.tone || "（未标注）"}
+
+【各卷概述（按顺序）】
+${list}
+
+要求：
+1. 用 300-500 字，按时序讲清全书至今的主干推进：核心矛盾的演变、主要人物的处境与关系变化、已埋设或已回收的重要伏笔。
+2. 综合去重、承前启后，形成连贯叙述，不要逐卷罗列流水账，也不要臆造未提供的情节。
+3. 只输出这段梗概正文，不要输出标题、列表符号或任何说明文字。`,
     },
   ];
 }

@@ -80,7 +80,8 @@ novel-workflow/
 │           ├── volume/route.ts        # 展开单卷为章节脉络（JSON）
 │           ├── chapter-outline/route.ts # 重生单章脉络（JSON）
 │           ├── chapter/route.ts       # 生成单章正文（流式）
-│           ├── digest/route.ts        # 章节归档：抽取摘要/设定/伏笔（JSON）
+│           ├── digest/route.ts        # 章节归档：抽取摘要/设定(含状态/事件)/伏笔/冲突（JSON）
+│           ├── recap/route.ts         # 分层滚动前情：卷级 arc / 全书 storySoFar 梳理（JSON）
 │           └── reconcile/route.ts     # 重生成后全链一致性统一校订（JSON）
 ├── components/
 │   ├── TopBar.tsx                 # 顶栏（含配置快速切换）
@@ -92,19 +93,19 @@ novel-workflow/
 │   ├── CardLibrary.tsx            # 文风卡 / 作品档案卡的卡库列表管理
 │   ├── ChangeSummary.tsx          # 重生成后「全链一致性统一」变更摘要面板
 │   ├── PromptLibrary.tsx          # 每本书独立的提示词库面板
-│   └── CodexPanel.tsx             # 设定库 + 伏笔表的管理面板
+│   └── CodexPanel.tsx             # 设定库(含状态/置顶/状态历程) + 伏笔表的管理面板
 ├── lib/
 │   ├── types.ts                   # 全部数据模型与工具函数（单一数据源）
 │   ├── llm.ts                     # OpenAI 兼容流式/非流式调用封装
-│   ├── prompts.ts                 # 所有提示词构造（架构/展开/写作/归档/文风分析/一致性统一）
-│   ├── retrieval.ts               # 连贯性检索：设定命中、近章摘要、伏笔、归档回填
+│   ├── prompts.ts                 # 所有提示词构造（架构/展开/写作/归档/分层前情 recap/文风分析/一致性统一）
+│   ├── retrieval.ts               # 连贯性检索：多因子设定命中、分层前情(arc/storySoFar)、伏笔、归档回填(含状态时间线)
 │   ├── reconcile.ts               # 重生成后全链一致性统一：收集下游 → 请求校订 → 回写
 │   ├── style.ts                   # 拆书学文风：分块/采样/哈希/多块确定性合并
 │   ├── archive.ts                 # 拆书学设定：档案归一化/合并 + 二创开新书 seed
 │   ├── parseNovel.ts              # 导入 .txt 长文按「第N章」切分为卷/章结构
 │   ├── encoding.ts                # 中文文本文件编码探测与健壮解码
 │   ├── storage.ts                 # 服务端项目 + 文风卡 + 作品档案文件读写 + 字段回填
-│   └── client.ts                  # 客户端：配置档管理 + REST/流式 fetch 封装
+│   └── client.ts                  # 客户端：配置档管理 + REST/流式 fetch 封装 + generateRecap 前情梳理
 ├── data/projects/*.json           # 每部作品的持久化数据
 ├── data/styles/*.json             # 文风规则卡缓存（按范文哈希）
 ├── data/archives/*.json           # 作品档案卡缓存（按范文哈希）
@@ -122,8 +123,9 @@ novel-workflow/
 - **`ProjectSetup`**：题材、灵感、主角、文风、**内容分级 `rating`**、目标总字数、单章字数、**预设总章节数 `targetChapters`**、**去 AI 味 `deAi` + 负面清单 `bannedList`**、**已应用文风卡 `styleCards[]`（多选；旧版单张 `styleCard` 兼容保留）**、其他要求。
 - **`StoryBible`**：logline、梗概、世界观、主题、文风视角、人物表。
 - **`Volume` / `Chapter`**：卷含 `plannedChapters` 与 `chapters[]`；章含 `synopsis`（脉络）、`content`（正文）、`summary`（成稿摘要，供跨章续写用）、`status`（empty/draft/done）。
-- **`CodexEntry`**：设定库条目（人物/地点/物品/势力/设定/其他），含别名（用于检索命中）与「更新于第几章」。
+- **`CodexEntry`**：设定库条目（人物/地点/物品/势力/设定/其他），含别名（用于检索命中）与「更新于第几章」；另含 **`status`（存续状态，如 存活/死亡/失踪，作硬约束）**、**`pinned`（核心条目，检索时恒定注入）**、**`events[]`（`CodexEvent{chapter,note}` 状态变化时间线，按章追加）**。
 - **`Foreshadow`**：伏笔，四状态 `planted / reinforced / paid / abandoned`，记录埋设章与回收章。
+- **分层滚动前情字段**：`Volume.arcSummary`（本卷至今的滚动摘要，中层记忆）、`Project.storySoFar`（已完成分卷综合而成的全书故事梗概，顶层记忆），弥合「故事圣经 ↔ 近几章」之间的中期断层。
 - **`PromptEntry`**：提示词库条目，含 `source`（manual/bible/volumes/chapter-outline/prose 五类来源）、`content`（诉求/方向文本）、`note`（如“第12章”）、`enabled`（是否参与后续生成）。带方向的重生会自动入库并去重。
 - **`StyleCard`**：拆书学文风产出的 7 维文风规则卡（另带一条综合各维度的「模仿指南 `signature`」），可写入 `setup.styleCards` 作为写作硬约束（多张时融合模仿）；高频词与禁用词均不含人名/称谓/专有名词，支持在拆书工坊内新建自定义卡及就地编辑。
 - **`StoryArchive`**：拆书学设定产出的作品档案（作品名/梗概/世界观/力量体系/主题/文风提示 + `ArchiveCharacter[]` 人物 / `ArchiveEntry[]` 地点与势力 / `mainPlot[]` 主线），经 `seedProjectFromArchive` 折叠为一部可写作的 `Project`。
@@ -142,13 +144,13 @@ novel-workflow/
 - **人工介入**：`StepOutline` 支持增删分卷、逐卷调整章节数、**逐章编辑标题/脉络/增删/排序**；`StepWriting` 可在正文页就地改本章脉络，双向即时同步（共用同一 `project` 数据）。
 
 ### 6.2 连贯性检索（`lib/retrieval.ts`，解决跨卷失忆）
-写每一章前，`buildChapterContext` 组装一小份**高相关上下文**，而非灌入全部历史：
-- **设定命中**：以本章标题+脉络+近章摘要为「查询」，对 `codex` 做**别名/关键词子串匹配**打分（无需向量/额外模型调用，确定性强、快），取 Top-N 注入。
-- **前情回顾**：取目标章之前最近 4 章的 `summary`，形成滚动「故事梗概」。
+写每一章前，`buildChapterContext` 组装一小份**高相关、分层的上下文**，而非灌入全部历史。检索借鉴 Generative Agents 的多因子打分与 RAPTOR 的分层摘要思路（全程确定性、无向量/额外模型调用）：
+- **设定命中（升级打分）**：`selectRelevantCodex` 以本章标题+脉络+近章摘要为「查询」，对 `codex` 综合 **相关性（别名/关键词子串命中，主名权重更高）+ 新近度（越近更新越高）+ 重要度（人物/势力加权）** 打分取 Top-N；**核心条目（`pinned` 或故事圣经主要人物）恒定注入**，不受本章是否点名限制，避免主角在细纲未点名时「消失」。
+- **分层前情（RAPTOR 式三级）**：`storySoFar`（先前各卷梗概）→ `volumeArc`（本卷至今概述）→ 近 4 章 `summary`，逐级细化，弥合中期长线剧情断层。
 - **待回收伏笔**：注入所有 `planted/reinforced` 的伏笔，提醒铺垫或回收。
 
 ### 6.3 写后归档（`digest`，让设定库/伏笔表自动生长）
-每章写完（可自动或手动）调用 `/api/generate/digest`：模型读正文，抽取**本章摘要 + 设定更新 + 伏笔动向**。`applyDigest` 以**同名合并**（codex 按 name、伏笔按 title）回填，避免重复累积，实现「越写档案越全」。
+每章写完（可自动或手动）调用 `/api/generate/digest`：模型读正文，抽取**本章摘要 + 设定更新（含 `status` 存续状态、`event` 本章变化）+ 伏笔动向 + `conflicts` 冲突提示**。`applyDigest` 以**同名合并**（codex 按 name、伏笔按 title）回填：保留最新 `summary`、更新 `status`、把 `event` 去重追加进 `events[]` 时间线（借鉴 mem0 的带时间锚点增量更新，而非整体覆盖），实现「越写档案越全」。归档发现的 `conflicts`（如已死角色再登场、位置/关系与前文不符）仅**提示作者复核**，不自动改写正文。
 
 ### 6.4 去 AI 味（`deAiBlock`）
 `setup.deAi` 开启后注入**分类硬性反套路指令**，取材自维基百科「Signs of AI writing」的 24 类 AI 写作特征、并针对中文小说正文调校：① 禁 AI 腔句式（对仗升华、否定排比、三段式并列、含糊归因与限定堆砌）；② 回避一份高频「AI 腔词」黑名单（缓缓/微微/嘴角勾起/五味杂陈/仿佛/这一刻/彰显…）；③ 禁「同义词循环」换称指代；④ 节奏与标点克制（长短交错、破折号/省略号/感叹号节制、不每段以景物情绪收尾）；⑤ 段尾章末禁强行抒情点题；⑥ 对话要有个体差异与潜台词；⑦ 正向要求「鲜活」——用具体细节替代抽象概括、人物要有态度、允许适度粗糙。并支持用户自定义**负面清单**追加。
@@ -188,6 +190,13 @@ novel-workflow/
 ### 6.10 方向驱动式重生成
 大纲与正文的每一次重生都可附一句「调整方向」（如“节奏再快一点”“弱化感情线”）：方向文本作为额外约束随本次请求注入，同时经 `recordPromptEntry` 入库（见 6.8），既影响当次产出，也沉淀为可复用的长期风格偏好。
 
+### 6.11 分层滚动前情（`recap`，解决中后期记忆错乱）
+为弥合“故事圣经↔近几章”之间的中期断层，引入两层按需重算的滚动摘要（RAPTOR 思路），调用 `/api/generate/recap`（两模式输出纯文）：
+- **卷级 arc**（mode=volume）：`buildVolumeArcPrompt` 据本卷已归档章节摘要生成「本卷至今概述」写入 `Volume.arcSummary`。
+- **全书 storySoFar**（mode=book）：`buildStorySoFarPrompt` 据先前各卷 arc 综合为全书梗概写入 `Project.storySoFar`。
+- **自动刷新 + 手动兜底**：`StepWriting.refreshRecaps` 在每章归档后触发——卷中每累积数章刷新卷级 arc，卷末（跨卷时）同时刷新全书 storySoFar；正文页「梳理前情」按钮可手动强制重算。`generateRecap`（`lib/client.ts`）为 best-effort，失败不阻断写作。
+- **写作注入**：`recapBlock` 把 `storySoFar`/`volumeArc` 置于本章提示词最前（优于设定库/近章摘要），让中后期章节始终掌握长线脉络。
+
 ---
 
 ## 7. 多模型/API 配置档（`lib/client.ts`）
@@ -211,7 +220,8 @@ novel-workflow/
 | `/api/generate/volume` | POST | 展开单卷为章节脉络（返回 JSON） |
 | `/api/generate/chapter-outline` | POST | 重生单章脉络（返回 JSON） |
 | `/api/generate/chapter` | POST | 生成单章正文（**text/plain 流式**） |
-| `/api/generate/digest` | POST | 章节归档，抽取摘要/设定/伏笔（返回 JSON） |
+| `/api/generate/digest` | POST | 章节归档，抽取摘要/设定(含状态/事件)/伏笔/冲突（返回 JSON） |
+| `/api/generate/recap` | POST | 分层滚动前情：卷级 arc / 全书 storySoFar 梳理（返回 `{text}`） |
 | `/api/generate/reconcile` | POST | 重生后全链一致性统一校订（返回 JSON） |
 | `/api/style-analyze` | POST | 分析单个文本块，返回该块文风分析（客户端负责分块/合并） |
 | `/api/styles` | GET | 文风卡库列表 |
@@ -237,8 +247,9 @@ novel-workflow/
    → 逐卷 /api/generate/volume → chapters 脉络
    → 人工增删改分卷/章节脉络（可带方向重生，方向入提示词库）
 → 进入 StepWriting 逐章：
-   buildChapterContext(检索设定/摘要/伏笔) + enabledPrompts → /api/generate/chapter(流式) → 正文
-   → /api/generate/digest → applyDigest 回填 codex/foreshadows/summary
+   buildChapterContext(检索设定/分层前情/伏笔) + enabledPrompts → /api/generate/chapter(流式) → 正文
+   → /api/generate/digest → applyDigest 回填 codex(含状态/事件时间线)/foreshadows/summary，并报告 conflicts 冲突
+   → refreshRecaps → /api/generate/recap 刷新卷级 arcSummary / 全书 storySoFar
    → （重写章节时）/api/generate/reconcile → applyReconcile 统一下游已成稿
 → 连续生成：runAuto 串行下传最新快照（working），逐章函数式合并写回，互不覆盖
 → Workspace 防抖(900ms) PUT /api/projects/[id] 持久化（卸载前补 flush）
@@ -251,7 +262,7 @@ novel-workflow/
 
 - **数据结构单一来源**：改模型先动 `lib/types.ts`；`storage.ts` 的 `normalizeProject` 负责为旧存档回填新字段，加字段时记得在此兜底，避免旧作品报错。
 - **提示词集中在 `lib/prompts.ts`**：调风格/结构/约束在这里改，与 UI 解耦。
-- **检索是确定性的**：`retrieval.ts` 用子串匹配而非 embedding；若要升级为向量检索，替换 `selectRelevantCodex` 即可，接口保持不变。
+- **检索是确定性的**：`retrieval.ts` 用子串匹配 + 多因子打分（相关/新近/重要度）而非 embedding；若要升级为向量检索，改写 `selectRelevantCodex` 打分部分即可，其核心条目恒定注入与分层前情（`storySoFar`/`volumeArc`）机制不受影响。
 - **SSR 水合**：`ProfileSwitcher` 等客户端专属组件用 `mounted` 守卫延迟渲染，改动时注意别引入水合不一致。
 - **不可变更新 + reindex**：增删卷/章后统一重排 `index` 保持序号连续。
 - **状态写回用函数式合并，勿用陈旧快照整体覆盖**：Workspace 的 `patch((p) => updater(p))` 基于最新状态叠加。在 async 循环（如连续生成）中切勿用闭包捕获的陈旧 `project` prop 算出整棵树再 `patch(() => snapshot)` 整体替换——会抹掉循环内先写的章节；应通过返回值串行下传最新快照。组件卸载前需 `flush` 补存，防 900ms 防抖窗口内离开丢正文。
