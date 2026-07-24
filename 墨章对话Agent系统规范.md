@@ -243,3 +243,15 @@ interface ChatMessage {
 3. 对话面板中，用自然语言可完成：新建作品 → 生成设定集 → 生成分卷脉络 → 续写某章草稿。
 4. 每个写操作（保存/删除/折回/正文落库）都弹出变更提案并等待确认，取消则不落库。
 5. 桌面版仍为单 exe，双击可用，数据位置沿用现有自定义逻辑。
+
+---
+
+## 8. 落地状态与实测结论（阶段一）
+
+- **状态**：阶段一（§4「Agent 外壳」）已落地并推送远端（`origin/main` 至 `947a9c6`）。
+- **架构 as-built**：客户端对话面板 `AgentChat`（`useChat` 状态机）↔ `/api/agent/chat`（Agent 工具循环 + 确认流编排）↔ `lib/agent/tools.ts` 直调 `lib/` 纯函数与 `projectRepository`。右栏 AgentPanel 已双模嵌入（`c286eb0`）。
+- **NDJSON 契约**：`/api/agent/chat` 返回 `Content-Type: application/x-ndjson`，逐行一个 `JSON.stringify(AgentStreamEvent)`，`\n` 分隔，末尾必有 `{"type":"done"}`；客户端 `httpChatStream` 按行解析（半行缓冲拼齐）。
+- **实测结论（真实模型）**：只读工具（`list_projects`）直接执行；写操作（`create_project`）先出 `proposal` 不落库，`ConfirmToken` 确认后 `apply` 才落库；全链事件流 text/tool_call/tool_result/proposal/done 符合契约。
+- **幂等硬化**：创建类工具在 `propose` 预分配 id，经 `argsPatch` 固化进 `proposal.args`，`apply` 复用该 id —— 确认一次 = 落库一次（`947a9c6`）。
+- **配置注记**：当前 DeepSeek baseUrl 需模型名 `deepseek-v4-flash` / `deepseek-v4-pro`，不接受 `deepseek-chat`（默认值已改，`ffb2caa`）。
+- **待办（移交阶段二前）**：UI 端到端逐条回归「设定集 / 分卷 / 续写」；桌面单 exe 回归。
