@@ -46,7 +46,7 @@ export function apiUrl(path: string): string {
 export const DEFAULT_CONFIG: ApiConfig = {
   baseUrl: "https://api.deepseek.com/v1",
   apiKey: "",
-  model: "deepseek-chat",
+  model: "deepseek-v4-flash",
   temperature: 0.85,
 };
 

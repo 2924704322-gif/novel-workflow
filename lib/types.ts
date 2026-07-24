@@ -230,7 +230,7 @@ export interface ProjectSummary {
 export interface ApiConfig {
   baseUrl: string; // 例如 https://api.deepseek.com/v1
   apiKey: string;
-  model: string; // 例如 deepseek-chat
+  model: string; // 例如 deepseek-v4-flash
   temperature: number;
 }
 

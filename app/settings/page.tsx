@@ -15,7 +15,7 @@ import {
 import type { ApiConfig } from "@/lib/types";
 
 const PRESETS: { label: string; baseUrl: string; model: string }[] = [
-  { label: "DeepSeek", baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat" },
+  { label: "DeepSeek", baseUrl: "https://api.deepseek.com/v1", model: "deepseek-v4-flash" },
   { label: "OpenAI", baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini" },
   { label: "Moonshot", baseUrl: "https://api.moonshot.cn/v1", model: "moonshot-v1-8k" },
   { label: "通义千问", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus" },
@@ -286,7 +286,7 @@ export default function SettingsPage() {
                   className="input"
                   value={cfg.model}
                   onChange={(e) => updateField("model", e.target.value)}
-                  placeholder="deepseek-chat"
+                  placeholder="deepseek-v4-flash"
                 />
               </div>
               <div className="field">
