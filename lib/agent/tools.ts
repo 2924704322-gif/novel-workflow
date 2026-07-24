@@ -58,7 +58,18 @@ export interface ToolContext {
   ownerId: string; // 接缝③/⑤，本地固定 "local"
   config: ApiConfig; // 接缝④，模型与密钥
   projectId?: string; // 当前会话绑定作品（工具参数缺省时回退到它）
+  // 本轮生成候选缓存（服务端注入，跨工具共享）：generate_* 写入，save_project 折回落库。
+  // 使模型无需把生成的大 JSON 复制进 save_project.patch，规避 function-calling 中继丢失。
+  generated?: GeneratedCache;
 }
+
+// 一条已生成候选：按类型（bible/volumes/volume/chapter/chapter_outline/recap）缓存本轮产物。
+export interface GeneratedEntry {
+  kind: string;
+  payload: unknown;
+  at: number;
+}
+export type GeneratedCache = Record<string, GeneratedEntry>;
 
 type ToolArgs = Record<string, any>;
 
@@ -108,6 +119,103 @@ function volumeGlobalStart(p: Project, volumeId: string): number {
     start += v.chapters.length;
   }
   return start;
+}
+
+// 记本轮某类生成候选到共享缓存，供 save_project 折回落库（避免模型中继大 JSON）。
+function remember(ctx: ToolContext, kind: string, payload: unknown): void {
+  if (!ctx.generated) return;
+  ctx.generated[kind] = { kind, payload, at: Date.now() };
+}
+
+// 把本轮已生成候选按类型折进一个 Partial<Project> 补丁（服务端合并，含分卷/章节等
+// 嵌套写回），返回补丁与变更的顶层字段名。save_project.propose 据此生成摘要并把
+// 补丁固化进 proposal.args，apply 时直接覆盖落库——模型全程无需复制生成的 JSON。
+function foldGenerated(
+  p: Project,
+  cache: GeneratedCache,
+  kinds: string[]
+): { patch: Partial<Project>; keys: string[] } {
+  const patch: Partial<Project> = {};
+  const keys: string[] = [];
+  let volumes: Volume[] | null = null; // 惰性深拷贝，多个 kind 可累积改动
+  const editVolumes = (): Volume[] => {
+    if (!volumes) {
+      const base = (patch.volumes as Volume[] | undefined) || p.volumes;
+      volumes = base.map((v) => ({ ...v, chapters: v.chapters.map((c) => ({ ...c })) }));
+    }
+    return volumes;
+  };
+  const markVolumes = () => {
+    if (!keys.includes("volumes")) keys.push("volumes");
+  };
+
+  for (const kind of kinds) {
+    const e = cache[kind];
+    if (!e) continue;
+    const pl = e.payload as any;
+    if (kind === "bible") {
+      patch.bible = (pl.bible ?? pl) as StoryBible;
+      if (!keys.includes("bible")) keys.push("bible");
+      if (typeof pl.title === "string" && pl.title.trim()) {
+        patch.title = pl.title.trim();
+        if (!keys.includes("title")) keys.push("title");
+      }
+    } else if (kind === "volumes") {
+      patch.volumes = (pl.volumes ?? pl) as Volume[];
+      markVolumes();
+    } else if (kind === "volume") {
+      const vols = editVolumes();
+      const v = vols.find((x) => x.id === pl.volumeId);
+      if (v) v.chapters = (pl.chapters as Chapter[]) || [];
+      markVolumes();
+    } else if (kind === "chapter_outline") {
+      const vols = editVolumes();
+      const v = vols.find((x) => x.id === pl.volumeId);
+      const ch = pl.chapter || {};
+      if (v) {
+        v.chapters = [
+          ...v.chapters,
+          {
+            id: rid(),
+            index: v.chapters.length + 1,
+            title: ch.title || "",
+            synopsis: ch.synopsis || "",
+            content: "",
+            summary: "",
+            wordCount: 0,
+            status: "empty",
+            updatedAt: Date.now(),
+          },
+        ];
+      }
+      markVolumes();
+    } else if (kind === "chapter") {
+      const vols = editVolumes();
+      for (const v of vols) {
+        const c = v.chapters.find((x) => x.id === pl.chapterId);
+        if (c) {
+          c.content = pl.content || "";
+          c.wordCount = pl.wordCount || countWords(c.content);
+          c.status = c.content ? "draft" : c.status;
+          c.updatedAt = Date.now();
+          break;
+        }
+      }
+      markVolumes();
+    } else if (kind === "recap") {
+      if (pl.mode === "book") {
+        patch.storySoFar = pl.text || "";
+        if (!keys.includes("storySoFar")) keys.push("storySoFar");
+      } else {
+        const vols = editVolumes();
+        const v = vols.find((x) => x.id === pl.volumeId);
+        if (v) v.arcSummary = pl.text || "";
+        markVolumes();
+      }
+    }
+  }
+  if (volumes) patch.volumes = volumes;
+  return { patch, keys };
 }
 
 const projectIdParam = {
@@ -169,27 +277,45 @@ const create_project: AgentTool = {
 const save_project: AgentTool = {
   name: "save_project",
   description:
-    "把一组字段覆盖保存到作品（如 title/phase/bible/volumes/setup/codex/foreshadows/storySoFar）。正文落库、设定集/分卷/章节草稿的持久化都经此工具。写操作，需用户确认。",
+    "把一组字段覆盖保存到作品。持久化 generate_* 的生成候选时，优先用 fromGenerated 列出候选类型（如 ['bible']/['volumes']/['volume']/['chapter']/['recap']），平台会自动把本轮生成结果合并落库——无需把生成的 JSON 复制进 patch。也可直接用 patch 覆盖顶层字段（title/phase/setup/codex/...）。写操作，需用户确认。",
   group: "A",
   write: true,
   parameters: {
     type: "object",
     properties: {
       ...projectIdParam,
+      fromGenerated: {
+        type: "array",
+        items: { type: "string" },
+        description:
+          "要落库的本轮已生成候选类型：bible/volumes/volume/chapter/chapter_outline/recap。省略且未提供 patch 时，默认落库本轮全部已生成候选。",
+      },
       patch: {
         type: "object",
         description:
-          "要覆盖写入的字段（Partial<Project>）。仅提供需变更的顶层字段即可。",
+          "要覆盖写入的顶层字段（Partial<Project>）。仅提供需变更的字段即可。",
       },
     },
-    required: ["patch"],
   },
   propose: async (args, ctx) => {
     const p = await loadProject(ctx, args.projectId);
-    const keys = Object.keys((args.patch as object) || {});
+    const explicit = (args.patch as Partial<Project>) || {};
+    const cache = ctx.generated || {};
+    let kinds: string[] = Array.isArray(args.fromGenerated)
+      ? (args.fromGenerated as string[])
+      : [];
+    // 未显式指定、且没有手动 patch 时：默认折回本轮全部已生成候选。这正是修复
+    // 「模型以空 patch 调用 save_project」的关键——空调用也能正确落库。
+    if (kinds.length === 0 && Object.keys(explicit).length === 0) {
+      kinds = Object.keys(cache);
+    }
+    const folded = foldGenerated(p, cache, kinds);
+    const finalPatch: Partial<Project> = { ...folded.patch, ...explicit };
+    const keys = Array.from(new Set([...folded.keys, ...Object.keys(explicit)]));
     return {
       changeSummary: `保存作品「${p.title}」：更新字段 ${keys.join("、") || "（无）"}`,
       diff: { projectId: p.id, changedKeys: keys },
+      argsPatch: { patch: finalPatch },
     };
   },
   apply: async (args, ctx) => {
@@ -249,14 +375,16 @@ const generate_bible: AgentTool = {
       buildBiblePrompt(p.setup, args.direction),
       { maxTokens: 8192 }
     );
-    return extractJson<{ title?: string; bible: StoryBible }>(raw);
+    const result = extractJson<{ title?: string; bible: StoryBible }>(raw);
+    remember(ctx, "bible", result);
+    return result;
   },
 };
 
 const generate_volumes: AgentTool = {
   name: "generate_volumes",
   description:
-    "根据故事设定集生成【分卷脉络】。返回已成形的 Volume[]（含 id/序号/空章节数组），可直接作为 save_project 的 patch.volumes 保存。",
+    "根据故事设定集生成【分卷脉络】。返回已成形的 Volume[]（含 id/序号/空章节数组）。落库请调用 save_project 并设 fromGenerated:['volumes']。",
   group: "B",
   write: false,
   parameters: {
@@ -286,14 +414,16 @@ const generate_volumes: AgentTool = {
       chapters: [],
       arcSummary: "",
     }));
-    return { volumes };
+    const out = { volumes };
+    remember(ctx, "volumes", out);
+    return out;
   },
 };
 
 const generate_volume: AgentTool = {
   name: "generate_volume",
   description:
-    "把某一卷细化为章节脉络。返回已成形的 Chapter[]（含 id/序号，正文为空）。需把它并入该卷 chapters 后经 save_project 保存。",
+    "把某一卷细化为章节脉络。返回已成形的 Chapter[]（含 id/序号，正文为空）。落库请调用 save_project 并设 fromGenerated:['volume']（平台会自动并入该卷 chapters）。",
   group: "B",
   write: false,
   parameters: {
@@ -328,7 +458,9 @@ const generate_volume: AgentTool = {
       status: "empty",
       updatedAt: Date.now(),
     }));
-    return { volumeId: v.id, chapters };
+    const out = { volumeId: v.id, chapters };
+    remember(ctx, "volume", out);
+    return out;
   },
 };
 
@@ -365,14 +497,16 @@ const generate_chapter_outline: AgentTool = {
       { maxTokens: 2048 }
     );
     const chapter = extractJson<{ title: string; synopsis: string }>(raw);
-    return { volumeId: v.id, chapter };
+    const out = { volumeId: v.id, chapter };
+    remember(ctx, "chapter_outline", out);
+    return out;
   },
 };
 
 const generate_chapter: AgentTool = {
   name: "generate_chapter",
   description:
-    "为指定章节生成/续写正文：先组装三层记忆上下文（build_chapter_context），再据本章细纲写作。返回正文与字数（草稿），落库请经 save_project 写回该章 content。",
+    "为指定章节生成/续写正文：先组装三层记忆上下文（build_chapter_context），再据本章细纲写作。返回正文与字数（草稿）。落库请调用 save_project 并设 fromGenerated:['chapter']（平台会自动写回该章 content）。",
   group: "B",
   write: false,
   parameters: {
@@ -410,12 +544,14 @@ const generate_chapter: AgentTool = {
       { maxTokens: 8192 }
     );
     const content = (raw || "").trim();
-    return {
+    const out = {
       chapterId: f.chapter.id,
       globalNo: f.global,
       content,
       wordCount: countWords(content),
     };
+    remember(ctx, "chapter", out);
+    return out;
   },
 };
 
@@ -476,7 +612,9 @@ const generate_recap: AgentTool = {
         buildStorySoFarPrompt(bible, priorArcs),
         { maxTokens: 2048 }
       );
-      return { mode: "book", text: (raw || "").trim() };
+      const out = { mode: "book", text: (raw || "").trim() };
+      remember(ctx, "recap", out);
+      return out;
     }
     const v = p.volumes.find((x) => x.id === args.volumeId);
     if (!v) throw new Error("卷不存在。");
@@ -486,7 +624,9 @@ const generate_recap: AgentTool = {
       buildVolumeArcPrompt(v, sums, v.arcSummary),
       { maxTokens: 2048 }
     );
-    return { mode: "volume", volumeId: v.id, text: (raw || "").trim() };
+    const out = { mode: "volume", volumeId: v.id, text: (raw || "").trim() };
+    remember(ctx, "recap", out);
+    return out;
   },
 };
 

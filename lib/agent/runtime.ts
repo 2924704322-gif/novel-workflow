@@ -96,7 +96,8 @@ function systemPrompt(projectId?: string): string {
     "- A 组（数据）：列出/读取/新建/保存/删除作品；",
     "- B 组（生成）：设定集、分卷、单卷章纲、单章脉络、正文、归档摘要、滚动前情、一致性校正；",
     "- C 组（记忆）：组装章节上下文、检索世界档案、折回归档/校正。",
-    "生成类工具只产出候选，不落库；要持久化必须再调用写工具（如 save_project）。",
+    "生成类工具（generate_*）只产出候选，不落库；要持久化须再调用 save_project。",
+    "保存 generate_* 的生成结果时，直接调用 save_project 并在 fromGenerated 里列出候选类型（如 ['bible']、['volumes']、['volume']、['chapter']、['recap']），平台会自动把本轮生成结果合并落库——切勿把生成的 JSON 复制进 patch。",
     "所有写操作（write）都会先生成变更提案交用户确认，你只管按需调用工具即可，平台会处理确认流程；不要假装已经保存成功。",
     "调用工具时优先使用已绑定的作品，无需反复询问 projectId。用中文与用户交流，回答简洁。",
   ];
@@ -144,6 +145,7 @@ export async function* runAgentTurn(
     ownerId: rt.ownerId,
     config: req.config,
     projectId: req.projectId,
+    generated: {},
   };
 
   const oai = toOAIMessages(req.messages, req.projectId);

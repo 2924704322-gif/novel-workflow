@@ -84,7 +84,7 @@ interface ProjectRepository {
 - [x] `components/AgentChat.tsx`：对话面板（消息列表 + 输入框 + 流式渲染）
 - [x] 解析 `AgentStreamEvent`：文本增量、工具调用/结果展示（`useChat` 状态机）
 - [x] 变更提案确认流：收到 `proposal` 渲染 changeSummary + diff，「确认/取消」→ 下一轮回传 `confirmations`
-- [~] 独立入口 `app/agent/page.tsx` 已就绪；**接入三栏 AgentPanel 位**待主会话 WIP（AppShell/AgentPanel）落定后对接
+- [x] 独立入口 `app/agent/page.tsx` 已就绪；**已接入三栏右栏 AgentPanel**（`c286eb0`，AgentChat 双模嵌入）
 - [x] 默认 transport 已切真实 `/api/agent/chat`（`httpChatStream(getApiBase())`），可覆盖为 mock
 
 **进度 / 备注：**
@@ -110,8 +110,68 @@ interface ProjectRepository {
 
 ## 7. 阶段一验收（对齐规范 §7）
 
-- [ ] `apiBase` 可配置，默认本地端口，切换 URL 后请求正确改向
-- [ ] 数据读写经 `ProjectRepository`，`ownerId="local"` 落盘与改造前一致（旧作品可正常打开）
-- [ ] 对话面板可用自然语言完成：新建作品 → 生成设定集 → 生成分卷脉络 → 续写某章草稿
-- [ ] 每个写操作弹出变更提案并等待确认，取消则不落库
-- [ ] 桌面版仍为单 exe，数据位置沿用现有自定义逻辑
+- [x] `apiBase` 可配置，默认本地端口，切换 URL 后请求正确改向 —— 接缝①已落地（见 §3）。
+- [x] 数据读写经 `ProjectRepository`，`ownerId="local"` 落盘与改造前一致（旧作品可正常打开）—— 接缝②已落地。
+- [x] 对话面板可用自然语言完成：新建作品 → 生成设定集 → 生成分卷脉络 → 续写某章草稿 —— **已于 2026-07-25 用真实模型（deepseek-v4-flash）逐条端到端跑通**（详见 §9 T1）；期间发现并修复了「生成候选→save_project 落库」的模型中继 JSON 缺口（方案 b：`generated` 缓存 + `fromGenerated` 服务端折回）。
+- [x] 每个写操作弹出变更提案并等待确认，取消则不落库 —— 实测：写操作只出 `proposal` 不落库，确认后 `apply` 才写盘；并已幂等硬化（`947a9c6`，确认一次 = 落库一次）。
+- [~] 桌面版仍为单 exe，数据位置沿用现有自定义逻辑 —— 本阶段未改动 Electron 打包与数据定位逻辑，**未做桌面回归**，视为保持不变。
+
+---
+
+## 8. 阶段一收尾状态
+
+- 阶段一已合入 `main` 并推送 `origin/main`（至 `947a9c6`）。
+- 提交栈：`8495eb1`（契约冻结）→ `6d34a21`（Sub A）→ `9e458c8`（Sub B）→ `f9a0757`（真实 NDJSON）→ `f5d41ad`（看板）→ `ae5b20a`（checkpoint）→ `c286eb0`（三栏接入）→ `ffb2caa`（模型名）→ `947a9c6`（幂等硬化）。
+- 当前工作区有两处**未提交**的文档改动（本看板 §7/§8、规范 §8），随收尾一并提交。
+
+---
+
+## 9. 下一阶段 · 阶段一收尾（当前主攻）
+
+> 目标：闭合阶段一验收 §7 中仍为 `[~]` 的两项（UI 端到端逐条回归、桌面单 exe 回归），并把工具覆盖对齐规范 §3.4。收尾达标后方可移交阶段二（酒馆式角色卡对话）。
+
+### 现状订正（务必以此为准）
+- **工具覆盖**：`tools.ts` 已注册 **17 个**——A(5) + B(8) + C(4，含 `apply_digest`/`apply_reconcile`）。此前看板/口径误记 C 组 apply_* 缺失，已订正：**C 组齐全**。
+- 所有 `generate_*` 均为 `write=false` 候选生成器；**落库统一经 `save_project` 走提案→确认→落库**。
+- 规范 §3.4 的 **D 组拆书学工具（`analyze_style`/`analyze_archive`/`list_style_cards`/`list_archives`）尚未注册**；按规范 §4 属阶段二「二创开新书」前置，非阶段一验收项 → 列为**可选提前项 T4**。
+
+### T1 · UI 端到端逐条回归（对话面板 + 真实模型）｜✅ 已通过 §7.3
+> 实测于 2026-07-25，`localhost:3000` + 真实模型 `deepseek-v4-flash`。窄视口下三栏布局塌陷（右栏 AgentPanel 宽度为 0，无法直接点按），故改用**页面内 fetch 复刻 `useChat` 协议**（`window.__t1` harness：`cfg()` 读 localStorage `p.config`；`turn(confirmations)` POST `/api/agent/chat` 解析 NDJSON）验证流式 API 契约——符合本项目既有实践。
+
+**通过项 ✅**
+- [x] NDJSON 事件流完整：只读链 `list_projects` 得 `tool_call/tool_result/text/done`；写链得 `tool_call/proposal/done`，`error` 分支亦正常。
+- [x] 旧作品可打开：`list_projects` 正常返回既有 8 部作品（标题齐全）。
+- [x] 写操作确认流（以 `create_project` 全链验证）：先出 `proposal` **不落库**；**取消（approved=false）不落库**（仍 8 部）；确认后落库（8→9，新建测试作品 `mrz82nso4vid`）；**幂等**——对已应用提案重复确认返回「提案已失效或不存在」，count 不变。
+
+**阻塞缺陷 ⛔ → 已修复 ✅（2026-07-25）**
+- 初测（对 `mrz82nso4vid`）：**`generate_* → save_project` 两步链无法落库**——模型正确编排 `get_project → generate_bible → save_project`，但 `save_project` 的 `proposal.args` 恒为 `{}`（`changedKeys:[]`），确认后 `bible` 仍为 `null`；**显式指令重试仍为空 patch**，排除提示词因素。
+  - **根因**：`save_project.patch` 原为**无内层 schema 的裸 `object`**，function-calling 模型（deepseek-v4-flash）不填充大型嵌套自由对象参数。
+- **采用方案 (b) 修复**（`lib/agent/tools.ts` + `lib/agent/runtime.ts`）：
+  - `ToolContext` 增本轮共享 `generated` 缓存；各 `generate_*` 的 `run()` 产出后 `remember(ctx, kind, payload)`（kind∈bible/volumes/volume/chapter/chapter_outline/recap）。
+  - `save_project` 增 `fromGenerated: string[]` 参数；`propose` 经 `foldGenerated()` 从缓存**服务端合并**出补丁（含分卷/章节等嵌套写回），并固化进 `argsPatch.patch`，`apply` 直接覆盖落库——模型全程无需复制 JSON。
+  - **关键兜底**：`fromGenerated` 省略且无手动 `patch` 时，默认折回本轮全部已生成候选 → 即使模型以空 `save_project()` 调用也能正确落库。
+  - 系统提示同步：指引模型用 `fromGenerated:['bible']` 保存、切勿复制 JSON。`npx tsc --noEmit` 通过。
+- **修复后全链复测（新测试作品 `mrz8wk5p1rhq2`，setup=玄幻/听草玉，事后已删）**：
+  - [x] 设定集：`generate_bible → save_project`，`changedKeys:[bible,title]`，确认后 `bible` 落库（logline/8 人物）、`title→草木知音`。
+  - [x] 分卷脉络：`generate_volumes → save_project`，`changedKeys:[volumes]`，确认后 3 卷落库。
+  - [x] 单卷展开：`generate_volume → save_project`，嵌套并入 vol1 的 3 章（`empty`）。
+  - [x] 续写草稿：`build_chapter_context → generate_chapter → save_project`，`changedKeys:[volumes]`，确认后首章 `content` 写回 4334 字、`status: empty→draft`。
+- 结论：**平台契约、确认流与三条生成链均已实测通过**（NDJSON 完整、取消不落库、确认落库幂等由 create_project + 各链 propose→confirm 复核）；「生成候选→落库」的模型中继 JSON 缺口已由方案 (b) 消除。**T1 达标，§7.3 可关闭。**
+
+### T2 · 桌面单 exe 回归｜阻塞验收 §7.5
+- [ ] `npm run app:build:win`（或 `app:build`）构建 NSIS 安装包成功。
+- [ ] 安装/启动后：数据存储位置沿用现有自定义逻辑（`NOVEL_DATA_ROOT` / 菜单改路径）不变。
+- [ ] Electron 窗口内右栏 AgentPanel 可用，至少跑通一次 `create_project` 提案→确认闭环。
+
+### T3 · 收尾文档同步 + 提交
+- [ ] T1/T2 通过后，把 §7 对应项由 `[~]` 改 `[x]` 并附实测结论。
+- [ ] 提交未提交的两处文档改动 + 本轮看板更新；推送 `origin/main`。
+
+### T4 · （可选，阶段二前置）补齐 D 组拆书学工具
+- [ ] 扩展 `AgentTool.group` 类型加 `"D"`。
+- [ ] 新增 `analyze_style`/`analyze_archive`（复用 `/api/style-analyze`、`/api/archive-analyze` 的 prompt 构造 + `completeChat`，服务端进程内直调，参照 B 组只读候选模式）。
+- [ ] 新增 `list_style_cards`/`list_archives`（只读，列 `data/styles`、`data/archives` 缓存目录）。
+- [ ] 注册进 `AGENT_TOOLS` 并 `npm run build` 通过。
+
+### 收尾完成判据（Definition of Done）
+- §7 全部为 `[x]`（含实测结论）；`npm run build` 与桌面打包均通过；`main` 已推送且工作区干净。
