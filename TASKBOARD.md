@@ -53,40 +53,42 @@ interface ProjectRepository {
 - 流式事件 `AgentStreamEvent`：`text | tool_call | tool_result | proposal | done | error`
 - 写操作提案 `ChangeProposal` + 确认 `ConfirmToken`（Human-in-the-loop，规范 §3.5）
 
-> 约定：`/api/agent/chat` 以分块流逐条回传 `AgentStreamEvent`（JSON 行）；客户端按 `type` 分发。序列化细节由 Sub A 决定并在此补记，Sub B 据此解析。
+> **序列化格式（Sub A 已定，Sub B 已对齐）**：`/api/agent/chat` 返回 `Content-Type: application/x-ndjson`，
+> 逐行一个 `AgentStreamEvent` 的 `JSON.stringify`，以 `\n` 分隔，末尾必有 `{"type":"done"}`。
+> 客户端 `httpChatStream(apiBase)` 按行解析（半行缓冲拼齐），按 `type` 分发。
 
 ---
 
-## 3. Sub A · 后端 / Agent（`feat/agent-backend`）
+## 3. Sub A · 后端 / Agent（`feat/agent-backend`）✅ 已合入 main
 
 参照规范 §2 / §3 / §5。归属文件：`lib/repository.ts`（实现加固）、`lib/config-provider.ts`、`lib/auth.ts`、`lib/storage.ts`（收敛）、`lib/agent/tools.ts`、`lib/agent/runtime.ts`、`app/api/agent/chat/route.ts`。
 
-- [ ] 接缝①：`lib/client.ts` 的 fetch 统一走 `apiBase`（与 Sub B 协调，见下方边界说明）
-- [ ] 接缝②：`app/api/projects*` 与工具层统一经 `projectRepository` 访问；`ownerId="local"` 落盘与今天一致
-- [ ] 接缝④：`lib/config-provider.ts` 集中获取生效 `ApiConfig`
-- [ ] 接缝⑤：`lib/auth.ts` no-op 鉴权，注入 `ownerId="local"`
-- [ ] `lib/agent/tools.ts`：注册 A/B/C 组工具（规范 §3.4），映射真实符号
-- [ ] `lib/agent/runtime.ts`：Agent 工具循环 + 写操作确认流编排（产出 `ChangeProposal`，凭 `ConfirmToken` 落库）
-- [ ] `app/api/agent/chat/route.ts`：流式回传 `AgentStreamEvent`
-- [ ] `ChatSession` 经 Repository 落存储（新增会话存储实现）
+- [x] 接缝①：`lib/client.ts` 新增 `getApiBase/setApiBase/apiUrl`，REST 统一走 `apiUrl()`
+- [x] 接缝②：`app/api/projects*` 与工具层经 `projectRepository` 访问；`ownerId="local"` 落盘与今天一致
+- [x] 接缝④：`lib/config-provider.ts` 集中获取生效 `ApiConfig`
+- [x] 接缝⑤：`lib/auth.ts` no-op 鉴权，注入 `ownerId="local"`
+- [x] `lib/agent/tools.ts`：注册 A/B/C 组工具（规范 §3.4），映射真实符号
+- [x] `lib/agent/runtime.ts`：Agent 工具循环 + 写操作确认流编排（产出 `ChangeProposal`，凭 `ConfirmToken` 落库）
+- [x] `app/api/agent/chat/route.ts`：NDJSON 流式回传 `AgentStreamEvent`
+- [x] `ChatSession` 经 `sessionRepository` 落存储（按作品收敛 `chat-<projectId|global>`）
 
 **进度 / 备注：**
-- （在此补记流式序列化格式，供 Sub B 对齐）
+- 序列化格式见 §2（NDJSON）。会话按作品落一段可续写对话；本轮助手文本 + toolCalls 累积入库。
 
 ---
 
-## 4. Sub B · 客户端 / UX（`feat/agent-ui`）
+## 4. Sub B · 客户端 / UX（`feat/agent-ui`）✅ 已合入 main
 
-参照规范 §3.5 / §5。归属文件：`components/AgentChat.tsx`、对话面板接入现有三栏外壳、变更提案确认 UI。**后端未就绪前对着 §2 契约用 mock 流开发。**
+参照规范 §3.5 / §5。归属文件：`components/AgentChat.tsx`、`lib/agent/useChat.ts`、`lib/agent/mockStream.ts`、`app/agent/page.tsx`、变更提案确认 UI。
 
-- [ ] `components/AgentChat.tsx`：对话面板（消息列表 + 输入框 + 流式渲染）
-- [ ] 解析 `AgentStreamEvent`：文本增量、工具调用/结果展示
-- [ ] 变更提案确认流：收到 `proposal` 事件渲染 changeSummary + diff，提供「确认/取消」，下一轮回传 `confirmations`
-- [ ] 接入现有 AppShell / AgentPanel 位（不破坏三栏外壳）
-- [ ] 与 Sub A 约定 `apiBase` 后，请求指向 `/api/agent/chat`
+- [x] `components/AgentChat.tsx`：对话面板（消息列表 + 输入框 + 流式渲染）
+- [x] 解析 `AgentStreamEvent`：文本增量、工具调用/结果展示（`useChat` 状态机）
+- [x] 变更提案确认流：收到 `proposal` 渲染 changeSummary + diff，「确认/取消」→ 下一轮回传 `confirmations`
+- [~] 独立入口 `app/agent/page.tsx` 已就绪；**接入三栏 AgentPanel 位**待主会话 WIP（AppShell/AgentPanel）落定后对接
+- [x] 默认 transport 已切真实 `/api/agent/chat`（`httpChatStream(getApiBase())`），可覆盖为 mock
 
 **进度 / 备注：**
-- （在此补记 mock 契约用法 / 联调结论）
+- mock 与真实传输同置 `mockStream.ts`；集成时 `AgentChat` 默认真实端点，演示可传 `transport={mockChatStream}`。
 
 ---
 
