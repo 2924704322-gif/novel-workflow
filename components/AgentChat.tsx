@@ -17,9 +17,11 @@ export interface AgentChatProps {
   projectId?: string;
   config?: ApiConfig; // 不传则读当前生效档
   transport?: ChatTransport; // 不传则走真实 /api/agent/chat；可覆盖为 mockChatStream
+  onCollapse?: () => void; // 传入则在 header 末尾出「收起」按钮（供右栏 AgentPanel 嵌入）
+  flush?: boolean; // 嵌入三栏右栏时去掉外框圆角、贴边填满栏位
 }
 
-export default function AgentChat({ projectId, config, transport }: AgentChatProps) {
+export default function AgentChat({ projectId, config, transport, onCollapse, flush }: AgentChatProps) {
   // config 只在首挂载时定一次，避免每次渲染 new 对象触发 useChat 重建。
   const [resolvedConfig] = useState<ApiConfig>(() => config ?? loadConfig());
   // 传输层同理只定一次：默认真实 NDJSON 端点，apiBase 走接缝①（缺省即相对路径）。
@@ -55,7 +57,7 @@ export default function AgentChat({ projectId, config, transport }: AgentChatPro
   }
 
   return (
-    <div style={S.root}>
+    <div style={flush ? { ...S.root, border: "none", borderRadius: 0, flex: "1 1 auto", minWidth: 0 } : S.root}>
       <style>{"@keyframes agentCaretBlink{0%,100%{opacity:1}50%{opacity:0}}"}</style>
       <header style={S.header}>
         <span className="seal seal--sm">章</span>
@@ -74,6 +76,17 @@ export default function AgentChat({ projectId, config, transport }: AgentChatPro
         >
           清空
         </button>
+        {onCollapse && (
+          <button
+            className="btn btn--ghost btn--sm"
+            style={{ marginLeft: 6 }}
+            onClick={onCollapse}
+            title="收起助手"
+            aria-label="收起助手"
+          >
+            ›
+          </button>
+        )}
       </header>
 
       <div ref={scrollRef} style={S.scroll}>
