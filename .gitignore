@@ -5,6 +5,9 @@
 /.next
 /out
 
+# typescript incremental build cache
+/tsconfig.tsbuildinfo
+
 # electron-builder output
 /dist
 

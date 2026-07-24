@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import TopBar from "@/components/TopBar";
 import ArchiveResult from "@/components/ArchiveResult";
 import CardLibrary from "@/components/CardLibrary";
 import {
@@ -441,7 +440,6 @@ export default function StylePage() {
 
   return (
     <>
-      <TopBar />
       <main className="shell" style={{ paddingTop: 28, paddingBottom: 60 }}>
         <h1 style={{ fontSize: 26 }}>拆书工坊</h1>
         <p className="muted" style={{ marginTop: 6, marginBottom: 18 }}>

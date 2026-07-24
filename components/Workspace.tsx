@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import TopBar from "@/components/TopBar";
 import StepOutline from "@/components/StepOutline";
 import StepWriting from "@/components/StepWriting";
 import { fetchProject, formatWords, saveProjectRemote } from "@/lib/client";
@@ -69,7 +68,6 @@ export default function Workspace({ id }: { id: string }) {
   if (notFound) {
     return (
       <>
-        <TopBar />
         <main className="shell" style={{ paddingTop: 80, textAlign: "center" }}>
           <p className="muted">这部作品不存在或已被删除。</p>
           <Link href="/" className="btn btn--ghost" style={{ marginTop: 16 }}>
@@ -83,7 +81,6 @@ export default function Workspace({ id }: { id: string }) {
   if (!project) {
     return (
       <>
-        <TopBar />
         <main className="shell" style={{ paddingTop: 80, textAlign: "center" }}>
           <p className="faint">正在展开书卷…</p>
         </main>
@@ -100,21 +97,6 @@ export default function Workspace({ id }: { id: string }) {
 
   return (
     <>
-      <TopBar
-        right={
-          <span
-            className="faint"
-            style={{ alignSelf: "center", fontSize: 12, minWidth: 52 }}
-          >
-            {saveState === "saving"
-              ? "保存中…"
-              : saveState === "saved"
-              ? "已保存"
-              : ""}
-          </span>
-        }
-      />
-
       {/* Work header with steps + progress */}
       <div style={{ borderBottom: "1px solid var(--line)" }}>
         <div className="shell" style={{ paddingTop: 22, paddingBottom: 20 }}>
@@ -171,6 +153,16 @@ export default function Workspace({ id }: { id: string }) {
             {project.setup.genre && (
               <span className="chip">{project.setup.genre}</span>
             )}
+            <span
+              className="faint"
+              style={{ marginLeft: "auto", fontSize: 12, minWidth: 52, textAlign: "right" }}
+            >
+              {saveState === "saving"
+                ? "保存中…"
+                : saveState === "saved"
+                ? "已保存"
+                : ""}
+            </span>
           </div>
 
           <div

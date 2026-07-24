@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import TopBar from "@/components/TopBar";
 import {
   fetchProjects,
   deleteProjectRemote,
@@ -49,8 +48,6 @@ export default function ShelfPage() {
 
   return (
     <>
-      <TopBar />
-
       <main className="shell" style={{ paddingTop: 60, paddingBottom: 90 }}>
         {/* Header */}
         <div

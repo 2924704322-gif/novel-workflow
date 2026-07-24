@@ -3,14 +3,21 @@
 import Link from "next/link";
 import ProfileSwitcher from "@/components/ProfileSwitcher";
 
+/**
+ * 全宽应用顶栏（由 AppShell 全局渲染一次）。
+ * 导航已移入左侧资源栏，顶栏只保留：侧栏开关(left) · 品牌 · 页面槽(right) · 模型档切换。
+ */
 export default function TopBar({
+  left,
   right,
 }: {
+  left?: React.ReactNode;
   right?: React.ReactNode;
 }) {
   return (
     <header className="topbar">
-      <div className="shell topbar-inner">
+      <div className="topbar-inner">
+        {left}
         <Link href="/" className="brand" aria-label="回到暖阁首页">
           <span className="seal">暖</span>
           <span style={{ display: "grid", lineHeight: 1.15 }}>
@@ -18,21 +25,16 @@ export default function TopBar({
             <span className="brand-sub">cozy atelier</span>
           </span>
         </Link>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center" }}>
+        <div
+          style={{
+            marginLeft: "auto",
+            display: "flex",
+            gap: 10,
+            alignItems: "center",
+          }}
+        >
           {right}
           <ProfileSwitcher />
-          <Link href="/shelf" className="btn btn--ghost btn--sm">
-            我的书架
-          </Link>
-          <Link href="/style" className="btn btn--ghost btn--sm">
-            拆书工坊
-          </Link>
-          <Link href="/continue" className="btn btn--ghost btn--sm">
-            续写
-          </Link>
-          <Link href="/settings" className="btn btn--ghost btn--sm">
-            接口设置
-          </Link>
         </div>
       </div>
     </header>

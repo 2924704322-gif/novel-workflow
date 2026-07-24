@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import TopBar from "@/components/TopBar";
 import { createProject, hasConfig } from "@/lib/client";
 
 export default function NewBookPage() {
@@ -25,8 +24,6 @@ export default function NewBookPage() {
 
   return (
     <>
-      <TopBar />
-
       <main className="shell" style={{ paddingTop: 60, paddingBottom: 90 }}>
         <div style={{ maxWidth: 560, margin: "0 auto" }}>
           <div className="fadeup" style={{ textAlign: "center", marginBottom: 26 }}>

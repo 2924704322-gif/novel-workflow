@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import TopBar from "@/components/TopBar";
 import {
   DEFAULT_CONFIG,
   addProfile,
@@ -143,7 +142,6 @@ export default function SettingsPage() {
 
   return (
     <>
-      <TopBar />
       <main className="shell" style={{ paddingTop: 48, paddingBottom: 80, maxWidth: 760 }}>
         <Link href="/" className="faint" style={{ fontSize: 13 }}>
           ← 返回书房

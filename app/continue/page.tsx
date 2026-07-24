@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import TopBar from "@/components/TopBar";
 import {
   createProject,
   fetchArchives,
@@ -189,8 +188,6 @@ export default function ContinuePage() {
 
   return (
     <>
-      <TopBar />
-
       <main className="shell" style={{ paddingTop: 44, paddingBottom: 90 }}>
         <div className="fadeup" style={{ maxWidth: 760, marginBottom: 22 }}>
           <div className="chip chip--cinnabar" style={{ marginBottom: 14 }}>

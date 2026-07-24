@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import TopBar from "@/components/TopBar";
 import { fetchProjects, hasConfig } from "@/lib/client";
 
 const ENTRIES = [
@@ -55,8 +54,6 @@ export default function HomePage() {
 
   return (
     <>
-      <TopBar />
-
       {/* Hero — relaxed, unhurried welcome */}
       <section className="shell" style={{ paddingTop: 76, paddingBottom: 30 }}>
         <div className="fadeup" style={{ maxWidth: 720 }}>
