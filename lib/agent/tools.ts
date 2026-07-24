@@ -71,10 +71,12 @@ export interface AgentTool {
   // 只读 / 生成类：立即执行并返回结果。
   run?: (args: ToolArgs, ctx: ToolContext) => Promise<unknown>;
   // 写操作类：产出人类可读的变更摘要 + diff，但不落库。
+  // argsPatch（可选）：回填确认落库所需的确定性字段（如预分配 id），
+  // runtime 会把它并入 proposal.args，使 apply 幂等。
   propose?: (
     args: ToolArgs,
     ctx: ToolContext
-  ) => Promise<{ changeSummary: string; diff?: unknown }>;
+  ) => Promise<{ changeSummary: string; diff?: unknown; argsPatch?: Record<string, any> }>;
   // 写操作类：用户确认后真正落库。args 为 propose 时的同一份入参。
   apply?: (args: ToolArgs, ctx: ToolContext) => Promise<unknown>;
 }
@@ -146,12 +148,19 @@ const create_project: AgentTool = {
     properties: { title: { type: "string", description: "作品标题" } },
     required: ["title"],
   },
-  propose: async (args) => ({
-    changeSummary: `新建空作品「${(args.title as string) || "未命名作品"}」`,
-    diff: { title: args.title },
-  }),
-  apply: async (args, ctx) => {
+  propose: async (args) => {
+    // 提案时即预分配作品 id，随 argsPatch 固化进 proposal.args；apply 复用它，
+    // 确保「确认一次 = 落库一次」：同一份已确认提案即便被重复 apply，也只覆盖
+    // 同一 id 而非新建出重复作品。
     const id = rid();
+    return {
+      changeSummary: `新建空作品「${(args.title as string) || "未命名作品"}」`,
+      diff: { id, title: args.title },
+      argsPatch: { id },
+    };
+  },
+  apply: async (args, ctx) => {
+    const id = (args.id as string)?.trim() || rid();
     const p = emptyProject(id, (args.title as string)?.trim() || "未命名作品");
     return projectRepository.save(ctx.ownerId, p);
   },

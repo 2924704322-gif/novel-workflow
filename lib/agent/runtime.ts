@@ -246,10 +246,14 @@ export async function* runAgentTurn(
             const built = tool.propose
               ? await tool.propose(args, toolCtx)
               : { changeSummary: `执行写操作 ${name}` };
+            // propose 可通过 argsPatch 回填确认落库所需的确定性字段（如预分配 id），
+            // 并入 proposal.args 后 apply 即幂等：重复确认只覆盖同一目标而非新建。
+            const patch = (built as { argsPatch?: Record<string, unknown> }).argsPatch;
+            const finalArgs = patch ? { ...args, ...patch } : args;
             const proposal: ChangeProposal = {
               id: rid(),
               tool: name,
-              args,
+              args: finalArgs,
               changeSummary: built.changeSummary,
               diff: built.diff,
             };
