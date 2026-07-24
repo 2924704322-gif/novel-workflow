@@ -2,27 +2,32 @@
 
 // AgentChat —— 墨章本地 Agent 对话面板（Sub B）。
 // 消息列表 + 流式渲染 + 工具活动 + 写操作提案确认流 + 输入框。
-// 数据流全部走 useChat；后端未就绪时默认吃 mock 流。
+// 数据流全部走 useChat；默认走真实 /api/agent/chat（NDJSON，经 apiBase 接缝①），
+// 传入 transport 可覆盖（如联调/演示时换成 mockChatStream）。
 // 视觉沿用「暖阁」暖色调与衬线标题，可整块嵌入右侧 AgentPanel 位。
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ApiConfig } from "@/lib/types";
-import { loadConfig } from "@/lib/client";
+import { loadConfig, getApiBase } from "@/lib/client";
 import type { ChangeProposal, ChatMessage } from "@/lib/agent/types";
 import { useChat } from "@/lib/agent/useChat";
-import type { ChatTransport } from "@/lib/agent/mockStream";
+import { httpChatStream, type ChatTransport } from "@/lib/agent/mockStream";
 
 export interface AgentChatProps {
   projectId?: string;
   config?: ApiConfig; // 不传则读当前生效档
-  transport?: ChatTransport; // 不传则用 mock；联调传 httpChatStream(apiBase)
+  transport?: ChatTransport; // 不传则走真实 /api/agent/chat；可覆盖为 mockChatStream
 }
 
 export default function AgentChat({ projectId, config, transport }: AgentChatProps) {
   // config 只在首挂载时定一次，避免每次渲染 new 对象触发 useChat 重建。
   const [resolvedConfig] = useState<ApiConfig>(() => config ?? loadConfig());
+  // 传输层同理只定一次：默认真实 NDJSON 端点，apiBase 走接缝①（缺省即相对路径）。
+  const [resolvedTransport] = useState<ChatTransport>(
+    () => transport ?? httpChatStream(getApiBase())
+  );
 
-  const chat = useChat({ config: resolvedConfig, transport, projectId });
+  const chat = useChat({ config: resolvedConfig, transport: resolvedTransport, projectId });
   const { messages, streaming, streamingText, toolActivity, proposals, error } = chat;
 
   const [input, setInput] = useState("");
