@@ -20,6 +20,29 @@ const CONFIG_KEY = "novel-workflow.apiConfig"; // legacy single-config key (auto
 const PROFILES_KEY = "novel-workflow.apiProfiles";
 const RECONCILE_PREF_KEY = "novel-workflow.autoReconcile";
 
+// 云就绪接缝①（系统规范 §2）：API Base URL。
+// 客户端所有 fetch 统一经 apiUrl() 拼接 apiBase。默认空串 = 相对路径，
+// 即请求打到当前本地服务端口（与今天完全一致）；未来上云只需把 apiBase 设为
+// 云端域名，无需改动任何调用处。归属 Sub A（后端）落地基础设施，Sub B 只消费。
+const API_BASE_KEY = "novel-workflow.apiBase";
+
+export function getApiBase(): string {
+  if (typeof window === "undefined") return "";
+  return (localStorage.getItem(API_BASE_KEY) || "").replace(/\/+$/, "");
+}
+
+export function setApiBase(url: string) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(API_BASE_KEY, (url || "").trim().replace(/\/+$/, ""));
+}
+
+// 把以 "/" 开头的 API 路径拼上生效的 apiBase。base 为空时原样返回相对路径。
+export function apiUrl(path: string): string {
+  const base = getApiBase();
+  if (!base) return path;
+  return `${base}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
 export const DEFAULT_CONFIG: ApiConfig = {
   baseUrl: "https://api.deepseek.com/v1",
   apiKey: "",
@@ -172,13 +195,13 @@ export function hasConfig(): boolean {
 
 // ---- project REST helpers ----
 export async function fetchProjects(): Promise<ProjectSummary[]> {
-  const res = await fetch("/api/projects", { cache: "no-store" });
+  const res = await fetch(apiUrl("/api/projects"), { cache: "no-store" });
   if (!res.ok) return [];
   return res.json();
 }
 
 export async function createProject(title: string): Promise<Project> {
-  const res = await fetch("/api/projects", {
+  const res = await fetch(apiUrl("/api/projects"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ title }),
@@ -188,13 +211,13 @@ export async function createProject(title: string): Promise<Project> {
 }
 
 export async function fetchProject(id: string): Promise<Project | null> {
-  const res = await fetch(`/api/projects/${id}`, { cache: "no-store" });
+  const res = await fetch(apiUrl(`/api/projects/${id}`), { cache: "no-store" });
   if (!res.ok) return null;
   return res.json();
 }
 
 export async function saveProjectRemote(project: Project): Promise<Project> {
-  const res = await fetch(`/api/projects/${project.id}`, {
+  const res = await fetch(apiUrl(`/api/projects/${project.id}`), {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(project),
@@ -205,28 +228,28 @@ export async function saveProjectRemote(project: Project): Promise<Project> {
 }
 
 export async function deleteProjectRemote(id: string): Promise<void> {
-  await fetch(`/api/projects/${id}`, { method: "DELETE" });
+  await fetch(apiUrl(`/api/projects/${id}`), { method: "DELETE" });
 }
 
 // ---- style card / story archive library helpers ----
 export async function fetchStyleCards(): Promise<StyleCard[]> {
-  const res = await fetch("/api/styles", { cache: "no-store" });
+  const res = await fetch(apiUrl("/api/styles"), { cache: "no-store" });
   if (!res.ok) return [];
   return res.json();
 }
 
 export async function deleteStyleCardRemote(hash: string): Promise<void> {
-  await fetch(`/api/styles/${hash}`, { method: "DELETE" });
+  await fetch(apiUrl(`/api/styles/${hash}`), { method: "DELETE" });
 }
 
 export async function fetchArchives(): Promise<StoryArchive[]> {
-  const res = await fetch("/api/archives", { cache: "no-store" });
+  const res = await fetch(apiUrl("/api/archives"), { cache: "no-store" });
   if (!res.ok) return [];
   return res.json();
 }
 
 export async function deleteArchiveRemote(hash: string): Promise<void> {
-  await fetch(`/api/archives/${hash}`, { method: "DELETE" });
+  await fetch(apiUrl(`/api/archives/${hash}`), { method: "DELETE" });
 }
 
 /**
@@ -239,7 +262,7 @@ export async function streamPost(
   onChunk: (fullText: string, delta: string) => void,
   signal?: AbortSignal
 ): Promise<string> {
-  const res = await fetch(url, {
+  const res = await fetch(apiUrl(url), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -287,7 +310,7 @@ export async function requestReconcile(body: {
   bible: StoryBible | null;
 }): Promise<ReconcileResult | null> {
   try {
-    const res = await fetch("/api/generate/reconcile", {
+    const res = await fetch(apiUrl("/api/generate/reconcile"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -322,7 +345,7 @@ export async function generateRecap(
       }
 ): Promise<string | null> {
   try {
-    const res = await fetch("/api/generate/recap", {
+    const res = await fetch(apiUrl("/api/generate/recap"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),

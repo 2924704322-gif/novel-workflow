@@ -14,6 +14,12 @@ const STYLE_DIR = path.join(ROOT, "styles");
 // Story archives (拆书学设定) cache under <root>/archives/, keyed by source file hash.
 const ARCHIVE_DIR = path.join(ROOT, "archives");
 
+// 数据根目录（供其它持久化模块复用，如 Agent 会话 / 待确认提案存储）。
+// 单一真源：与 projects/styles/archives 落在同一 root 下，桌面版沿用 NOVEL_DATA_ROOT。
+export function dataRoot(): string {
+  return ROOT;
+}
+
 // Backfill fields added in later versions so projects saved by older builds
 // keep working without a manual migration step.
 function normalizeProject(p: Project): Project {
