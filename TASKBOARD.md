@@ -200,5 +200,15 @@ interface ProjectRepository {
 - [x] 改 `lib/agent/useChat.ts`：新增 `runSkill(skillId, params)` 方法 + `activeSkill` 状态。
 - [x] `npx tsc --noEmit` + `npm run build` 均通过。
 
+### T6 · 阶段二 · 酒馆式角色卡对话｜✅ 已完成
+- [x] 新建 `lib/roleplay/types.ts`：`RoleplayCharacterCard`/`RoleplayMessage`/`RoleplaySession`/`RoleplayRequest`/`RoleplayStreamEvent` 类型定义，数据结构预留多角色扩展（`participants[]` + `activeCharacterId`）。
+- [x] 新建 `lib/roleplay/persona.ts`：`assemblePersona(project, character, messages)` per-turn 组装系统提示（角色人设 + selectRelevantCodex 世界书 + bible.tone），`getAvailableCharacters()` 提取可对话角色列表。
+- [x] 新建 `lib/roleplay/runtime.ts`：`runRoleplayTurn` 异步迭代器（加载作品→assemblePersona→streamChat 流式生成→落库 RoleplaySession），会话持久化至 `data/roleplay/`。
+- [x] 新建 `app/api/agent/roleplay/route.ts`：独立路由 `/api/agent/roleplay`，NDJSON 流式回传 `RoleplayStreamEvent`，与 `/api/agent/chat` 同格式。
+- [x] 新建 `lib/roleplay/useRoleplay.ts`：客户端 React hook 状态机（messages/streaming/streamingText/error/sessionId + send/stop/reset），直接 fetch 消费 NDJSON 流。
+- [x] 新建 `components/RoleplayChat.tsx`：沉浸式对话面板（角色选择网格→1v1 气泡对话），自动从 `/api/projects/[id]` 加载可用人物角色。
+- [x] 改 `components/AgentPanel.tsx`：双 Tab 面板（助手/角色对话），从 URL pathname 推断 projectId，角色对话 Tab 仅作品页可用。
+- [x] `npx tsc --noEmit` + `npm run build` 均通过，`/api/agent/roleplay` 路由已注册。
+
 ### 收尾完成判据（Definition of Done）
 - §7 全部为 `[x]`（含实测结论）；`npm run build` 与桌面打包均通过；`main` 已推送且工作区干净。
