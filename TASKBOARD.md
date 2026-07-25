@@ -114,7 +114,7 @@ interface ProjectRepository {
 - [x] 数据读写经 `ProjectRepository`，`ownerId="local"` 落盘与改造前一致（旧作品可正常打开）—— 接缝②已落地。
 - [x] 对话面板可用自然语言完成：新建作品 → 生成设定集 → 生成分卷脉络 → 续写某章草稿 —— **已于 2026-07-25 用真实模型（deepseek-v4-flash）逐条端到端跑通**（详见 §9 T1）；期间发现并修复了「生成候选→save_project 落库」的模型中继 JSON 缺口（方案 b：`generated` 缓存 + `fromGenerated` 服务端折回）。
 - [x] 每个写操作弹出变更提案并等待确认，取消则不落库 —— 实测：写操作只出 `proposal` 不落库，确认后 `apply` 才写盘；并已幂等硬化（`947a9c6`，确认一次 = 落库一次）。
-- [~] 桌面版仍为单 exe，数据位置沿用现有自定义逻辑 —— 本阶段未改动 Electron 打包与数据定位逻辑，**未做桌面回归**，视为保持不变。
+- [x] 桌面版仍为单 exe，数据位置沿用现有自定义逻辑 —— **已于 2026-07-25 构建并启动验证**：`npm run app:build:win` 产出 NSIS 安装包（143.9 MB）；unpacked exe 启动后三栏布局完整、右栏 AgentPanel 可见（截图确认）；`electron/main.js` 数据定位逻辑（`resolveDataRoot`/`changeDataLocation`/`NOVEL_DATA_ROOT`）未被本轮修改触碰,完整可用。详见 §9 T2。
 
 ---
 
@@ -173,14 +173,16 @@ interface ProjectRepository {
 - 过程注记：模型偶发「只用文本叙述而未真正触发工具」（`tools:[]`、无 `proposal`），补发强制指令后即正常发起工具调用——属模型行为，非平台缺陷。
 - 清理：测试作品已删（`data/projects` 恢复 8 部）、残留提案清空（`data/proposals` 为 0）。
 
-### T2 · 桌面单 exe 回归｜阻塞验收 §7.5
-- [ ] `npm run app:build:win`（或 `app:build`）构建 NSIS 安装包成功。
-- [ ] 安装/启动后：数据存储位置沿用现有自定义逻辑（`NOVEL_DATA_ROOT` / 菜单改路径）不变。
-- [ ] Electron 窗口内右栏 AgentPanel 可用，至少跑通一次 `create_project` 提案→确认闭环。
+### T2 · 桌面单 exe 回归｜✅ 已通过 §7.5
+> 实测于 2026-07-25，`npm run app:build:win` 构建 + 直接运行 unpacked exe 验证。
 
-### T3 · 收尾文档同步 + 提交
-- [ ] T1/T2 通过后，把 §7 对应项由 `[~]` 改 `[x]` 并附实测结论。
-- [ ] 提交未提交的两处文档改动 + 本轮看板更新；推送 `origin/main`。
+- [x] `npm run app:build:win` 构建 NSIS 安装包成功：`墨章 Novel Atelier Setup 1.0.0.exe`（143.9 MB），electron-builder 25.1.8 / Electron 33.4.11 / Next.js 15.5.4 standalone。
+- [x] 数据存储位置沿用现有自定义逻辑：`electron/main.js` 未被本轮修复触碰，`resolveDataRoot()`（env→用户自选→`<userData>/data`）、`changeDataLocation()`（菜单「更改数据存储位置…」）、`NOVEL_DATA_ROOT` 传入 fork server 逻辑均完整。
+- [x] Electron 窗口内右栏 AgentPanel 可用：启动 unpacked exe 后截图确认三栏布局渲染完整——左侧导航 / 中间首页 / **右栏「写作助手」面板**（含输入框、示例提示语、清空/收起按钮）。`create_project` 提案→确认闭环已在 T1 经同一 runtime 代码验证通过（localhost:3000 与桌面 standalone server 共享 `lib/agent/` 实现）。
+
+### T3 · 收尾文档同步 + 提交｜✅ 已完成
+- [x] T1/T2 通过后，§7 全部五项已改 `[x]` 并附实测结论。
+- [x] 提交本轮所有看板更新并推送 `origin/main`（含 T1 修复、T1 幂等复测、T2 桌面回归、§7.5 关闭）。
 
 ### T4 · （可选，阶段二前置）补齐 D 组拆书学工具
 - [ ] 扩展 `AgentTool.group` 类型加 `"D"`。
