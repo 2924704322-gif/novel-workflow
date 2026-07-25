@@ -1,285 +1,508 @@
-# 墨章 · Novel Atelier —— 项目总览
+# 墨章 · Novel Atelier —— 项目技术总览
 
-> 面向「百万字长篇小说」的本地 AI 创作工作流。从立意、大纲、分卷/章节脉络，到逐章成文、连贯性维护，一站式完成。
-
-本文档用于帮助后续开发者（含 Qoder 用户）快速理解项目结构、核心机制与扩展点，便于二次加工。
+> 面向「百万字长篇小说」的本地优先 AI 创作工作流桌面应用。
+> 本文档面向后续开发者及其 AI Agent，帮助快速理解项目全貌、接手开发。
 
 ---
 
-## 1. 项目定位
+## 1. 项目定位与核心理念
 
-一个**单人本地使用**的长篇小说创作台：接入任意 **OpenAI 兼容**的大模型接口（DeepSeek / OpenAI / 各类中转 API 等），把「百万字连载」拆解为可控的两级流程：
+**单人本地桌面应用**，接入任意 OpenAI 兼容大模型接口，提供从立意到完稿的全流程 AI 辅助。
 
-1. **立意 · 大纲**：由灵感生成故事圣经（Story Bible）+ 分卷规划 → 逐卷展开为章节脉络。
-2. **铺陈 · 正文**：以「大纲 + 检索到的相关设定 + 前情摘要 + 待回收伏笔」为上下文，逐章流式生成正文。
+**核心要解决的难题**：上下文长度有限时，如何让百万字保持前后连贯、人物/设定不崩、伏笔有始有终、且读起来不像 AI。
 
-核心要解决的难题是：**上下文长度有限，如何让百万字保持前后连贯、人物/设定不崩、伏笔有始有终、且读起来不像 AI。**
+**设计原则**：
+- 本地优先：数据全部在用户电脑上，密钥仅存浏览器 localStorage
+- Human-in-the-loop：所有写操作需用户确认方可落库
+- 云就绪接缝：鉴权/存储/配置层预留多租户接口，但当前 ownerId="local"
+- 即用即实、未用即留：已实现的功能完整可用；规划中的功能仅保留类型接口
 
 ---
 
 ## 2. 技术栈
 
-| 层面 | 选型 |
-| --- | --- |
-| 框架 | Next.js 15.5.4（App Router + Route Handlers） |
-| UI 运行时 | React 19 |
-| 语言 | TypeScript 5（strict），路径别名 `@/*` |
-| 样式 | Tailwind CSS v4（`@tailwindcss/postcss`）+ 自定义 CSS 变量设计系统 |
-| 数据持久化 | 服务端：每部作品一个 JSON 文件（`data/projects/*.json`）；客户端：`localStorage` 存 API 配置 |
-| 模型接入 | OpenAI 兼容 `/chat/completions`，SSE 流式 |
-| 运行环境 | 纯本地，无数据库、无外部服务依赖 |
+| 层面 | 选型 | 备注 |
+|------|------|------|
+| 框架 | Next.js 15.5 (App Router) | `output: "standalone"` 供 Electron 内嵌 |
+| UI | React 19 | 严格模式 |
+| 语言 | TypeScript 5 (strict) | 路径别名 `@/*` |
+| 样式 | Tailwind CSS v4 + CSS 变量设计系统 | 深墨蓝+朱砂红主题 |
+| 桌面壳 | Electron 33 + electron-builder 25 | NSIS 安装程序 |
+| 数据存储 | 纯 JSON 文件 (`data/` 目录) | 无数据库依赖 |
+| 模型接入 | OpenAI 兼容 `/chat/completions` | SSE 流式 + JSON 非流式 |
+| 导出 | epub-gen-memory (纯 JS EPUB) | 无 native addon |
+| 构建 | next build → standalone → electron-builder | CI: GitHub Actions |
 
-依赖极简：生产依赖仅 `next` / `react` / `react-dom`。
-
----
-
-## 3. 快速开始
-
-```bash
-# 首次
-npm install
-
-# 开发（http://localhost:3000）
-npm run dev
-
-# 生产构建 / 启动
-npm run build
-npm run start
-```
-
-Windows 用户可直接双击根目录 `start-dev.bat`：自动检测并安装依赖、启动 dev server、延时打开浏览器。
-
-**首次使用**：进入「接口设置」页填写 Base URL、API Key、模型名与温度。配置存于浏览器 `localStorage`，不上传服务器。
+**生产依赖**（极简）：`next` / `react` / `react-dom` / `epub-gen-memory`
 
 ---
 
-## 4. 目录结构
+## 3. 目录结构
 
 ```
 novel-workflow/
-├── app/
-│   ├── layout.tsx                 # 根布局、字体、全局样式挂载
-│   ├── page.tsx                   # 首页「书房」：作品列表 / 新建 / 删除
-│   ├── globals.css                # 设计系统（深墨蓝 + 朱砂红「书斋朱印」主题）
-│   ├── settings/page.tsx          # 多模型/API 配置管理器
-│   ├── style/page.tsx             # 拆书工坊：学文风（文风卡）/ 拆设定（作品档案→二创开新书）双标签
-│   ├── project/[id]/page.tsx      # 作品工作区入口（薄壳，渲染 Workspace）
+├── app/                          # Next.js App Router 页面与 API
+│   ├── page.tsx                  # 首页「书房」
+│   ├── globals.css               # 设计系统
+│   ├── settings/                 # 多模型 API 配置管理
+│   ├── style/                    # 拆书工坊（学文风/拆设定）
+│   ├── project/[id]/             # 作品工作区
+│   ├── agent/                    # Agent 独立入口
+│   ├── new/ | continue/ | shelf/ # 新建/续写/书架
 │   └── api/
-│       ├── projects/route.ts          # GET 列表 / POST 新建
-│       ├── projects/[id]/route.ts     # GET / PUT / DELETE 单个作品
-│       ├── style-analyze/route.ts     # 分析单个文本块（文风）
-│       ├── styles/route.ts            # GET 文风卡库列表
-│       ├── styles/[hash]/route.ts     # 文风规则卡缓存 GET / PUT
-│       ├── archive-analyze/route.ts   # 分析单个文本块（作品设定）
-│       ├── archive-reduce/route.ts    # 全书综合：多块档案归并为一张作品档案
-│       ├── archives/route.ts          # GET 作品档案卡库列表
-│       ├── archives/[hash]/route.ts   # 作品档案卡缓存 GET / PUT
-│       └── generate/
-│           ├── bible/route.ts         # 生成故事设定集（JSON）
-│           ├── volumes/route.ts       # 据定稿设定集规划分卷（JSON）
-│           ├── volume/route.ts        # 展开单卷为章节脉络（JSON）
-│           ├── chapter-outline/route.ts # 重生单章脉络（JSON）
-│           ├── chapter/route.ts       # 生成单章正文（流式）
-│           ├── digest/route.ts        # 章节归档：抽取摘要/设定(含状态/事件)/伏笔/冲突（JSON）
-│           ├── recap/route.ts         # 分层滚动前情：卷级 arc / 全书 storySoFar 梳理（JSON）
-│           └── reconcile/route.ts     # 重生成后全链一致性统一校订（JSON）
-├── components/
-│   ├── TopBar.tsx                 # 顶栏（含配置快速切换）
-│   ├── ProfileSwitcher.tsx        # 顶栏 API 配置档下拉切换
-│   ├── Workspace.tsx              # 工作区：两步导航 + 进度 + 自动保存（防抖）+ 就地改书名
-│   ├── StepOutline.tsx            # 第一步：立意/大纲/分卷/逐章脉络编辑 + 方向驱动重生
-│   ├── StepWriting.tsx            # 第二步：逐章写作、连写、导出、就地改脉络 + 提示词库/设定库/伏笔面板
-│   ├── ArchiveResult.tsx          # 作品档案卡展示 + 「以此开新书」
-│   ├── CardLibrary.tsx            # 文风卡 / 作品档案卡的卡库列表管理
-│   ├── ChangeSummary.tsx          # 重生成后「全链一致性统一」变更摘要面板
-│   ├── PromptLibrary.tsx          # 每本书独立的提示词库面板
-│   └── CodexPanel.tsx             # 设定库(含状态/置顶/状态历程) + 伏笔表的管理面板
-├── lib/
-│   ├── types.ts                   # 全部数据模型与工具函数（单一数据源）
-│   ├── llm.ts                     # OpenAI 兼容流式/非流式调用封装
-│   ├── prompts.ts                 # 所有提示词构造（架构/展开/写作/归档/分层前情 recap/文风分析/一致性统一）
-│   ├── retrieval.ts               # 连贯性检索：多因子设定命中、分层前情(arc/storySoFar)、伏笔、归档回填(含状态时间线)
-│   ├── reconcile.ts               # 重生成后全链一致性统一：收集下游 → 请求校订 → 回写
-│   ├── style.ts                   # 拆书学文风：分块/采样/哈希/多块确定性合并
-│   ├── archive.ts                 # 拆书学设定：档案归一化/合并 + 二创开新书 seed
-│   ├── parseNovel.ts              # 导入 .txt 长文按「第N章」切分为卷/章结构
-│   ├── encoding.ts                # 中文文本文件编码探测与健壮解码
-│   ├── storage.ts                 # 服务端项目 + 文风卡 + 作品档案文件读写 + 字段回填
-│   └── client.ts                  # 客户端：配置档管理 + REST/流式 fetch 封装 + generateRecap 前情梳理
-├── data/projects/*.json           # 每部作品的持久化数据
-├── data/styles/*.json             # 文风规则卡缓存（按范文哈希）
-├── data/archives/*.json           # 作品档案卡缓存（按范文哈希）
-├── start-dev.bat                  # Windows 一键启动
-└── next.config.mjs
+│       ├── agent/chat/           # Agent 对话（NDJSON 流）
+│       ├── agent/roleplay/       # 角色对话（NDJSON 流）
+│       ├── generate/             # 8 个生成端点
+│       ├── projects/             # 作品 CRUD
+│       ├── export/               # EPUB/MD/TXT 导出
+│       ├── history/              # 章节版本历史
+│       ├── queue/                # 任务队列
+│       ├── style-analyze/        # 文风分析
+│       ├── styles/               # 文风卡库
+│       ├── archive-analyze/      # 设定分析
+│       ├── archive-reduce/       # 档案归并
+│       └── archives/             # 档案卡库
+├── components/                   # 19 个 React 组件
+│   ├── StepOutline.tsx           # 三步立意向导（最大组件 54KB）
+│   ├── StepWriting.tsx           # 逐章写作面板
+│   ├── AgentChat.tsx             # Agent 对话面板
+│   ├── RoleplayChat.tsx          # 角色对话（1v1 + 多角色轮转）
+│   ├── ExportDialog.tsx          # 导出格式选择
+│   ├── HistoryPanel.tsx          # 版本历史 + diff + 回滚
+│   ├── TaskQueue.tsx             # 任务队列面板
+│   ├── CodexPanel.tsx            # 设定库 + 伏笔表
+│   ├── SkillPicker.tsx           # 技能选择器
+│   ├── PromptLibrary.tsx         # 提示词库
+│   ├── AppShell.tsx              # 三栏布局外壳
+│   └── ...                       # TopBar, Workspace 等
+├── lib/                          # 核心业务逻辑（纯函数 + 类型）
+│   ├── types.ts                  # 全部数据模型（单一来源）
+│   ├── llm.ts                    # LLM 流式/非流式调用
+│   ├── prompts.ts                # 所有提示词构造（41KB）
+│   ├── retrieval.ts              # 多因子检索 + 分层前情
+│   ├── reconcile.ts              # 重生成后一致性统一
+│   ├── style.ts                  # 拆书学文风
+│   ├── archive.ts                # 拆书学设定
+│   ├── storage.ts                # 文件读写
+│   ├── repository.ts             # ProjectRepository 接口
+│   ├── config-provider.ts        # 生效配置获取
+│   ├── auth.ts                   # 鉴权接缝（当前 no-op）
+│   ├── client.ts                 # 客户端 fetch + 配置档
+│   ├── future-stubs.ts           # 未来功能接口预留
+│   ├── agent/                    # Agent 系统（7 文件）
+│   │   ├── types.ts              # 契约类型
+│   │   ├── runtime.ts            # 工具循环 + 确认流
+│   │   ├── tools.ts              # 17+4 个注册工具
+│   │   ├── skills.ts             # 6 个内置技能
+│   │   ├── useChat.ts            # 客户端 hook
+│   │   ├── session-store.ts      # 会话持久化
+│   │   └── mockStream.ts         # Mock 传输
+│   ├── roleplay/                 # 角色对话（4 文件）
+│   │   ├── types.ts              # 多角色类型
+│   │   ├── persona.ts            # 人设组装
+│   │   ├── runtime.ts            # 1v1 + 多角色运行时
+│   │   └── useRoleplay.ts        # 客户端 hook
+│   ├── export/                   # 导出模块（5 文件）
+│   │   ├── types.ts / index.ts
+│   │   ├── epub.ts / markdown.ts / txt.ts
+│   ├── history/                  # 版本历史（3 文件）
+│   │   ├── types.ts / store.ts / diff.ts
+│   └── queue/                    # 任务队列（4 文件）
+│       ├── types.ts / store.ts / runner.ts / presets.ts
+├── electron/
+│   ├── main.js                   # Electron 主进程
+│   └── preload.js                # contextBridge IPC
+├── scripts/
+│   ├── prepare-standalone.mjs    # 构建后补齐静态资源
+│   └── generate-icon.mjs         # 应用图标生成
+├── data/                         # 运行时数据（gitignored）
+│   ├── projects/                 # 作品 JSON
+│   ├── styles/                   # 文风卡缓存
+│   ├── archives/                 # 档案卡缓存
+│   ├── chats/                    # Agent 会话
+│   ├── proposals/                # 待确认提案
+│   ├── roleplay/                 # 角色对话会话
+│   ├── history/                  # 章节快照
+│   └── queue/                    # 任务队列数据
+├── build/                        # 构建资源（icon.ico）
+├── .github/workflows/release.yml # CI 自动构建发布
+├── package.json                  # 项目配置
+├── tsconfig.json                 # TS strict 配置
+└── next.config.mjs               # Next.js standalone 配置
 ```
 
 ---
 
-## 5. 核心数据模型（`lib/types.ts`）
+## 4. 功能模块完整清单
 
-一部作品是一个 `Project`，随 `phase` 在两阶段流转，整体序列化为一个 JSON：
+### 4.1 创作核心流程
 
-- **`Project`**：`setup`（创作设定）、`bible`（故事圣经）、`volumes[]`（分卷→章节树）、`codex[]`（设定库）、`foreshadows[]`（伏笔表）、**`prompts[]`（本书独立提示词库）**。
-- **`ProjectSetup`**：题材、灵感、主角、文风、**内容分级 `rating`**、目标总字数、单章字数、**预设总章节数 `targetChapters`**、**去 AI 味 `deAi` + 负面清单 `bannedList`**、**已应用文风卡 `styleCards[]`（多选；旧版单张 `styleCard` 兼容保留）**、其他要求。
-- **`StoryBible`**：logline、梗概、世界观、主题、文风视角、人物表。
-- **`Volume` / `Chapter`**：卷含 `plannedChapters` 与 `chapters[]`；章含 `synopsis`（脉络）、`content`（正文）、`summary`（成稿摘要，供跨章续写用）、`status`（empty/draft/done）。
-- **`CodexEntry`**：设定库条目（人物/地点/物品/势力/设定/其他），含别名（用于检索命中）与「更新于第几章」；另含 **`status`（存续状态，如 存活/死亡/失踪，作硬约束）**、**`pinned`（核心条目，检索时恒定注入）**、**`events[]`（`CodexEvent{chapter,note}` 状态变化时间线，按章追加）**。
-- **`Foreshadow`**：伏笔，四状态 `planted / reinforced / paid / abandoned`，记录埋设章与回收章。
-- **分层滚动前情字段**：`Volume.arcSummary`（本卷至今的滚动摘要，中层记忆）、`Project.storySoFar`（已完成分卷综合而成的全书故事梗概，顶层记忆），弥合「故事圣经 ↔ 近几章」之间的中期断层。
-- **`PromptEntry`**：提示词库条目，含 `source`（manual/bible/volumes/chapter-outline/prose 五类来源）、`content`（诉求/方向文本）、`note`（如“第12章”）、`enabled`（是否参与后续生成）。带方向的重生会自动入库并去重。
-- **`StyleCard`**：拆书学文风产出的 7 维文风规则卡（另带一条综合各维度的「模仿指南 `signature`」），可写入 `setup.styleCards` 作为写作硬约束（多张时融合模仿）；高频词与禁用词均不含人名/称谓/专有名词，支持在拆书工坊内新建自定义卡及就地编辑。
-- **`StoryArchive`**：拆书学设定产出的作品档案（作品名/梗概/世界观/力量体系/主题/文风提示 + `ArchiveCharacter[]` 人物 / `ArchiveEntry[]` 地点与势力 / `mainPlot[]` 主线），经 `seedProjectFromArchive` 折叠为一部可写作的 `Project`。
+| 功能 | 入口 | 核心文件 |
+|------|------|----------|
+| 三步立意向导 | StepOutline.tsx | prompts.ts (buildBiblePrompt / buildVolumesPrompt / buildVolumeChaptersPrompt) |
+| 逐章正文生成 | StepWriting.tsx | retrieval.ts + prompts.ts (buildChapterPrompt) |
+| 连贯性检索 | 自动 (写章前) | retrieval.ts (selectRelevantCodex / buildChapterContext) |
+| 分层滚动前情 | 自动 + 手动 | client.ts (generateRecap) → /api/generate/recap |
+| 写后归档 (Digest) | 自动/手动 | /api/generate/digest → applyDigest |
+| 一致性统一 | 重生成后 | reconcile.ts → /api/generate/reconcile |
+| 去 AI 味 | setup.deAi=true | prompts.ts (deAiBlock) |
+| 内容分级 | setup.rating | prompts.ts (RATING_GUIDANCE) |
+| 方向驱动重生 | 带方向文本重生 | prompts.ts 注入 + recordPromptEntry 入库 |
+| 提示词库 | PromptLibrary.tsx | types.ts (PromptEntry) + enabledPrompts |
 
-> `types.ts` 同时是工具函数中心：`countWords`、`projectStats`、`emptyProject`、`toSummary`、`effectiveStyleCards`（多选文风卡回退）、`recordPromptEntry`/`enabledPrompts`（提示词库）、`DEFAULT_SETUP`、各枚举常量。**改数据结构从这里开始。**
+### 4.2 拆书工坊
 
----
+| 功能 | 路由 | 核心文件 |
+|------|------|----------|
+| 拆书学文风 | /style (Tab1) | style.ts + /api/style-analyze |
+| 拆书学设定 | /style (Tab2) | archive.ts + /api/archive-analyze + /api/archive-reduce |
+| 文风卡库 | /api/styles/ | data/styles/<hash>.json |
+| 档案卡库 | /api/archives/ | data/archives/<hash>.json |
+| 二创开新书 | ArchiveResult.tsx | archive.ts (seedProjectFromArchive) |
 
-## 6. 核心机制
+### 4.3 Agent 系统
 
-### 6.1 三步立意向导 + 两级大纲（可控篇幅）
-- **顺序向导**：`StepOutline` 把立意阶段拆成三步，须上一步完成才解锁下一步——① 创作设定（填 setup，至少有题材或核心灵感）→ ② 故事设定集（生成/校订 `bible`）→ ③ 分卷脉络（据定稿 bible 规划 volumes 并逐卷展开章节）。
-- **Level 1a**：`buildBiblePrompt` 仅生成故事设定集（logline/梗概/世界观/主题/基调/主要人物），不含分卷。
-- **Level 1b**：`buildVolumesPrompt(setup, bible)` 以定稿设定集为上下文规划分卷。卷数由「预设总章节数」或「目标字数 ÷ 12 万」推算；各卷 `chapterCount` 之和向总章数看齐。
-- **Level 2**：`buildVolumeChaptersPrompt` 把单卷展开为指定章数的章节脉络。
-- **人工介入**：`StepOutline` 支持增删分卷、逐卷调整章节数、**逐章编辑标题/脉络/增删/排序**；`StepWriting` 可在正文页就地改本章脉络，双向即时同步（共用同一 `project` 数据）。
+| 功能 | 路由/组件 | 核心文件 |
+|------|-----------|----------|
+| 对话 Agent | /api/agent/chat | agent/runtime.ts (工具循环) |
+| 17+4 工具 | - | agent/tools.ts (A/B/C/D 四组) |
+| 技能层 (Skill) | SkillPicker.tsx | agent/skills.ts (6 个内置技能) |
+| Human-in-the-loop | ChangeSummary.tsx | ChangeProposal + ConfirmToken |
+| 生成缓存→落库 | - | runtime.ts (generated 缓存 + fromGenerated) |
 
-### 6.2 连贯性检索（`lib/retrieval.ts`，解决跨卷失忆）
-写每一章前，`buildChapterContext` 组装一小份**高相关、分层的上下文**，而非灌入全部历史。检索借鉴 Generative Agents 的多因子打分与 RAPTOR 的分层摘要思路（全程确定性、无向量/额外模型调用）：
-- **设定命中（升级打分）**：`selectRelevantCodex` 以本章标题+脉络+近章摘要为「查询」，对 `codex` 综合 **相关性（别名/关键词子串命中，主名权重更高）+ 新近度（越近更新越高）+ 重要度（人物/势力加权）** 打分取 Top-N；**核心条目（`pinned` 或故事圣经主要人物）恒定注入**，不受本章是否点名限制，避免主角在细纲未点名时「消失」。
-- **分层前情（RAPTOR 式三级）**：`storySoFar`（先前各卷梗概）→ `volumeArc`（本卷至今概述）→ 近 4 章 `summary`，逐级细化，弥合中期长线剧情断层。
-- **待回收伏笔**：注入所有 `planted/reinforced` 的伏笔，提醒铺垫或回收。
+**工具分组**：
+- A 组（项目管理）：list_projects / get_project / create_project / save_project / set_project_setup
+- B 组（生成候选）：generate_bible / generate_volumes / generate_volume / generate_chapter_outline / generate_chapter / build_chapter_context / apply_digest / apply_reconcile
+- C 组（应用）：apply_digest / apply_reconcile / generate_recap / get_codex
+- D 组（拆书学）：analyze_style / analyze_archive / list_style_cards / list_archives
 
-### 6.3 写后归档（`digest`，让设定库/伏笔表自动生长）
-每章写完（可自动或手动）调用 `/api/generate/digest`：模型读正文，抽取**本章摘要 + 设定更新（含 `status` 存续状态、`event` 本章变化）+ 伏笔动向 + `conflicts` 冲突提示**。`applyDigest` 以**同名合并**（codex 按 name、伏笔按 title）回填：保留最新 `summary`、更新 `status`、把 `event` 去重追加进 `events[]` 时间线（借鉴 mem0 的带时间锚点增量更新，而非整体覆盖），实现「越写档案越全」。归档发现的 `conflicts`（如已死角色再登场、位置/关系与前文不符）仅**提示作者复核**，不自动改写正文。
+**内置技能**：write-chapter / write-and-digest / plan-volumes / plan-volume-detail / reconcile-downstream / generate-recap
 
-### 6.4 去 AI 味（`deAiBlock`）
-`setup.deAi` 开启后注入**分类硬性反套路指令**，取材自维基百科「Signs of AI writing」的 24 类 AI 写作特征、并针对中文小说正文调校：① 禁 AI 腔句式（对仗升华、否定排比、三段式并列、含糊归因与限定堆砌）；② 回避一份高频「AI 腔词」黑名单（缓缓/微微/嘴角勾起/五味杂陈/仿佛/这一刻/彰显…）；③ 禁「同义词循环」换称指代；④ 节奏与标点克制（长短交错、破折号/省略号/感叹号节制、不每段以景物情绪收尾）；⑤ 段尾章末禁强行抒情点题；⑥ 对话要有个体差异与潜台词；⑦ 正向要求「鲜活」——用具体细节替代抽象概括、人物要有态度、允许适度粗糙。并支持用户自定义**负面清单**追加。
+### 4.4 角色对话（酒馆式 Roleplay）
 
-### 6.5 内容分级与创作意图（`RATING_GUIDANCE`）
-四档分级（全年龄/青年/成人·严肃文学/成人·R18）会向模型**声明合法创作意图**，减少正常虚构剧情被误判拒绝。R18 档带硬护栏（全部角色成年、情节自愿、不涉未成年）。
-> 注意：这是**创作定位声明，非越狱**。能否落地取决于所连模型/接口的策略，官方严格服务仍可能拦截。
+| 功能 | 说明 |
+|------|------|
+| 1v1 对话 | 选角 → 沉浸式多轮对话，角色以第一人称回应 |
+| 多角色轮转 | 多选角色 → round-robin / manual / narrator-driven 三种模式 |
+| 人设组装 | assemblePersona: 角色人设 + 世界书检索 + bible.tone + 在场其他角色 |
+| 会话持久化 | data/roleplay/<sessionId>.json |
 
-### 6.6 拆书学文风（`lib/style.ts` + `/style`，模仿目标文风）
-上传一部 `.txt` 范文，让模型产出结构化「文风规则卡」并注入后续写作，形成「学 → 用」闭环：
-- **客户端编排**：`/style` 页先 `hashText`（FNV-1a，因浏览器 `SubtleCrypto` 无 md5）算内容指纹查缓存；未命中则 `chunkText`（按段落约 8000 字/块）→ `sampleChunks`（均匀采样含首块，最多 8 块）→ 逐块串行 POST `/api/style-analyze`，显示「第 N/M 块」进度。
-- **确定性合并**：`mergeStyleChunks` 免二次 LLM——数值取均值、类别多数投票、数组并集按频率截断、模仿指南取最详尽的一条，汇成一张 `StyleCard`（7 维：句式节奏 / 词汇特征 / 描写策略 / 对话风格 / 叙事结构 / 情绪基调 / 修辞偏好，另含模仿指南）。其中词汇特征的高频词只取风格实词，严禁人名/地名/专有名词。
-- **可编辑**：文风卡展示区可点「编辑」就地修改各维度字段（模仿指南/高频词/禁用词/例句等），保存回写 `data/styles/<hash>.json` 并刷新卡库。
-- **缓存**：以文件哈希为键存 `data/styles/<hash>.json`（`GET/PUT /api/styles/[hash]`），同一范文秒回。
-- **添加（多选）**：可导出 `.json`，或「应用到当前作品」追加写入 `setup.styleCards[]`（支持多张同时生效，旧版单张 `styleCard` 仍兼容）；`effectiveStyleCards` 优先取多选集合，`styleCardBlock` 随后把它们融合为写作硬约束注入 `buildChapterPrompt`（与去 AI 味并列，冲突时以规则卡为准）。除拆书产出外，可在 `CardLibrary` 卡库新建自定义文风卡。写作页顶部显示「文风·XX」标记提示已生效。
+**轮转模式**：
+- `round-robin`：按 turnOrder 自动轮转
+- `manual`：用户指定下一位发言者（targetCharacterId）
+- `narrator-driven`：旁白驱动场景切换
 
-### 6.7 拆书学设定·二创开新书（`lib/archive.ts` + `/style` 拆设定标签）
-与拆书学文风共用同一条管线（分块/采样/哈希/缓存），但抽取的是**作品档案**而非文风，目标是从一本书**一键二创开新书**：
-- **入口**：`/style` 页顶部「学文风 / 拆设定」双标签共用上传区；拆设定逐块串行 POST `/api/archive-analyze`（镜像 `/style-analyze`）。
-- **9 维抽取**：作品名 / 整体梗概 / 世界观 / 力量体系与世界规则 / 核心主题基调 / 文风提示 / 主要人物 / 关键地点与势力 / 主线剧情脉络。
-- **确定性合并**：`mergeArchiveChunks` 叙事字段取最长、人物/地点/势力按名并集、主线按时序去重，汇成一张 `StoryArchive`。
-- **缓存**：存 `data/archives/<hash>.json`（`GET/PUT /api/archives/[hash]`），与文风卡分目录互不冲突。
-- **二创开新书**：`seedProjectFromArchive` 新建一部作品——世界观/力量体系写入故事圣经，人物/地点/势力写入设定库，`phase="outline"` 后跳转到该作品。原作主线仅作**参考条目**（写入 codex 与 `setup.extra`），不强塞为新剧情，用户可在大纲页自由发展。
+### 4.5 章节版本历史
 
-### 6.8 每本书独立提示词库（`PromptLibrary` + `recordPromptEntry`/`enabledPrompts`）
-每部作品自带一份 `prompts[]` 提示词库，沉淀用户历次的创作诉求：
-- **自动入库**：在大纲/正文阶段带**调整方向**重生时，`recordPromptEntry` 按 `source`（bible/volumes/chapter-outline/prose）自动收录方向文本并**去重置顶**（同来源同内容不重复堆积）。
-- **手动管理**：`PromptLibrary` 面板可新增/编辑/启用停用/删除（`source=manual`）。
-- **参与生成**：`enabledPrompts` 只取已启用且非空的条目，随各生成接口（bible/volume/chapter 等）一并注入，让风格偏好跨章持续生效。
+| 功能 | 说明 |
+|------|------|
+| 自动快照 | save_project 落库前对被修改章节拍快照 |
+| 快照存储 | data/history/{projectId}/{chapterId}/{timestamp}.json |
+| 行级 Diff | 自实现 LCS 算法，返回增/删/改行数组 |
+| 一键回滚 | POST /api/history (action=restore) |
+| 保留策略 | 每章最多 50 个快照，FIFO |
 
-### 6.9 重生成后全链一致性统一（`lib/reconcile.ts` + `/api/generate/reconcile`）
-重写某章后，下游已成稿可能与新内容矛盾。开启后自动修补：
-- **收集下游**：`collectDownstream` 取被改章之后的已完成章节。
-- **请求校订**：`requestReconcile` 把原/新章摘要与下游章摘要送入 `/api/generate/reconcile`，模型产出需调整的章节及改动点。
-- **回写 + 变更摘要**：`applyReconcile` 回写下游章，`ChangeSummary` 面板展示本次全链变更，供用户复核。
+### 4.6 导出
 
-### 6.10 方向驱动式重生成
-大纲与正文的每一次重生都可附一句「调整方向」（如“节奏再快一点”“弱化感情线”）：方向文本作为额外约束随本次请求注入，同时经 `recordPromptEntry` 入库（见 6.8），既影响当次产出，也沉淀为可复用的长期风格偏好。
+| 格式 | 实现 | 备注 |
+|------|------|------|
+| EPUB | epub-gen-memory (纯 JS) | 含卷/章结构 |
+| Markdown | 纯字符串拼接 | 含 YAML front-matter |
+| TXT | 纯文本 | 最简格式 |
 
-### 6.11 分层滚动前情（`recap`，解决中后期记忆错乱）
-为弥合“故事圣经↔近几章”之间的中期断层，引入两层按需重算的滚动摘要（RAPTOR 思路），调用 `/api/generate/recap`（两模式输出纯文）：
-- **卷级 arc**（mode=volume）：`buildVolumeArcPrompt` 据本卷已归档章节摘要生成「本卷至今概述」写入 `Volume.arcSummary`。
-- **全书 storySoFar**（mode=book）：`buildStorySoFarPrompt` 据先前各卷 arc 综合为全书梗概写入 `Project.storySoFar`。
-- **自动刷新 + 手动兜底**：`StepWriting.refreshRecaps` 在每章归档后触发——卷中每累积数章刷新卷级 arc，卷末（跨卷时）同时刷新全书 storySoFar；正文页「梳理前情」按钮可手动强制重算。`generateRecap`（`lib/client.ts`）为 best-effort，失败不阻断写作。
-- **写作注入**：`recapBlock` 把 `storySoFar`/`volumeArc` 置于本章提示词最前（优于设定库/近章摘要），让中后期章节始终掌握长线脉络。
+**交付方式**：
+- Web 模式：浏览器 Blob 下载
+- Electron 模式：检测 `window.electronAPI` → 原生保存对话框（IPC: `save-file`）
 
----
+### 4.7 任务队列 + 断点续跑
 
-## 7. 多模型/API 配置档（`lib/client.ts`）
-
-- 支持保存多个命名配置档 `ApiProfile`，存于 `localStorage`（key `novel-workflow.apiProfiles`）。
-- 首次运行自动把旧单配置迁移为「默认配置」（`migrateOrSeed`）。
-- 顶栏 `ProfileSwitcher` 下拉即时切换，跨标签页同步（监听 `storage` / `focus`）。
-- 设置页为完整增删改查 + 设为当前 + 测试连接。
-- **向后兼容**：`loadConfig()`/`saveConfig()` 保持原签名，内部委托当前激活档，全站生成逻辑无需感知配置档存在。
-
----
-
-## 8. 服务端 API（App Router Route Handlers）
-
-| 路由 | 方法 | 作用 |
-| --- | --- | --- |
-| `/api/projects` | GET / POST | 作品列表 / 新建 |
-| `/api/projects/[id]` | GET / PUT / DELETE | 读取 / 保存 / 删除单部作品 |
-| `/api/generate/bible` | POST | 生成故事设定集（返回 JSON） |
-| `/api/generate/volumes` | POST | 据定稿设定集规划分卷（返回 JSON） |
-| `/api/generate/volume` | POST | 展开单卷为章节脉络（返回 JSON） |
-| `/api/generate/chapter-outline` | POST | 重生单章脉络（返回 JSON） |
-| `/api/generate/chapter` | POST | 生成单章正文（**text/plain 流式**） |
-| `/api/generate/digest` | POST | 章节归档，抽取摘要/设定(含状态/事件)/伏笔/冲突（返回 JSON） |
-| `/api/generate/recap` | POST | 分层滚动前情：卷级 arc / 全书 storySoFar 梳理（返回 `{text}`） |
-| `/api/generate/reconcile` | POST | 重生后全链一致性统一校订（返回 JSON） |
-| `/api/style-analyze` | POST | 分析单个文本块，返回该块文风分析（客户端负责分块/合并） |
-| `/api/styles` | GET | 文风卡库列表 |
-| `/api/styles/[hash]` | GET / PUT | 按文件哈希读取 / 写入缓存的文风规则卡 |
-| `/api/archive-analyze` | POST | 分析单个文本块，返回该块作品设定抽取（世界观/人物/主线） |
-| `/api/archive-reduce` | POST | 全书综合：多块档案归并为一张作品档案（返回 JSON） |
-| `/api/archives` | GET | 作品档案卡库列表 |
-| `/api/archives/[hash]` | GET / PUT | 按文件哈希读取 / 写入缓存的作品档案卡 |
-
-- 生成类接口 `dynamic = "force-dynamic"`、`maxDuration = 600`。
-- API Key 由前端随请求体传入，服务端仅透传给模型接口，不落盘。
-- `lib/llm.ts` 负责 Base URL 归一化、SSE 解析、流式/非流式两种消费方式；`extractJson`（`prompts.ts`）容错解析被 ``` 包裹或夹带解释的模型输出。
+| 功能 | 说明 |
+|------|------|
+| Step 序列化 | 每个任务分解为有序 TaskStep[] |
+| 指数退避重试 | 1s/2s/4s，最多 3 次 |
+| Checkpoint | 每 step 完成后持久化 completedSteps + lastResult |
+| 暂停/恢复 | AbortSignal + status 切换 |
+| SSE 推送 | GET /api/queue/[id]?stream=true |
+| 预设模板 | batchWriteChapters / batchDigest / fullPipeline |
 
 ---
 
-## 9. 数据流一览
+## 5. API 路由表
+
+| 路由 | 方法 | 格式 | 作用 |
+|------|------|------|------|
+| `/api/projects` | GET/POST | JSON | 作品列表/新建 |
+| `/api/projects/[id]` | GET/PUT/DELETE | JSON | 单作品 CRUD |
+| `/api/agent/chat` | POST | NDJSON 流 | Agent 对话 |
+| `/api/agent/roleplay` | POST | NDJSON 流 | 角色对话 |
+| `/api/generate/bible` | POST | JSON | 故事设定集 |
+| `/api/generate/volumes` | POST | JSON | 分卷规划 |
+| `/api/generate/volume` | POST | JSON | 单卷展开 |
+| `/api/generate/chapter-outline` | POST | JSON | 重生章脉络 |
+| `/api/generate/chapter` | POST | text/plain 流 | 正文生成 |
+| `/api/generate/digest` | POST | JSON | 章节归档 |
+| `/api/generate/recap` | POST | JSON | 前情梳理 |
+| `/api/generate/reconcile` | POST | JSON | 一致性统一 |
+| `/api/export` | GET | binary | 导出 EPUB/MD/TXT |
+| `/api/history` | GET/POST | JSON | 版本快照/回滚 |
+| `/api/queue` | GET/POST/DELETE | JSON | 任务队列 CRUD + start/pause |
+| `/api/queue/[id]` | GET | JSON/SSE | 单任务状态/进度流 |
+| `/api/style-analyze` | POST | JSON | 文风分析 |
+| `/api/styles` | GET | JSON | 文风卡库列表 |
+| `/api/styles/[hash]` | GET/PUT | JSON | 文风卡缓存 |
+| `/api/archive-analyze` | POST | JSON | 设定分析 |
+| `/api/archive-reduce` | POST | JSON | 档案归并 |
+| `/api/archives` | GET | JSON | 档案卡库列表 |
+| `/api/archives/[hash]` | GET/PUT | JSON | 档案卡缓存 |
+
+**通用约定**：
+- 生成类接口设 `dynamic="force-dynamic"`, `maxDuration=600`
+- API Key 由前端随请求体传入（字段 `config`），服务端不落盘
+- Agent/Roleplay 使用 NDJSON（每行一个 JSON 对象 + `\n`），末尾必有 `{"type":"done"}`
+
+---
+
+## 6. 数据模型概要（`lib/types.ts`）
+
+```typescript
+Project {
+  id, ownerId, title, phase("outline"|"writing"),
+  setup: ProjectSetup,      // 创作设定（题材/灵感/文风/分级/字数目标/deAi/styleCards）
+  bible: StoryBible | null, // 故事圣经（logline/梗概/世界观/人物表）
+  volumes: Volume[],        // 分卷 → 章节树
+  codex: CodexEntry[],      // 设定库（人物/地点/物品/势力，带状态时间线）
+  foreshadows: Foreshadow[],// 伏笔表（planted/reinforced/paid/abandoned）
+  prompts: PromptEntry[],   // 本书提示词库
+  storySoFar: string,       // 全书滚动梗概（顶层记忆）
+}
+
+Volume { index, title, arcSummary, plannedChapters, chapters: Chapter[] }
+Chapter { id, index, title, synopsis, content, summary, status, wordCount }
+CodexEntry { id, name, category, aliases[], summary, status, pinned, events[] }
+```
+
+> **改数据结构从 `lib/types.ts` 开始**；`storage.ts` 的 `normalizeProject` 负责为旧存档回填新字段。
+
+---
+
+## 7. 核心机制简述
+
+| 机制 | 说明 | 关键文件 |
+|------|------|----------|
+| 连贯性检索 | 多因子打分（相关+新近+重要度）取 Top-N 设定条目 + 核心角色恒定注入 | retrieval.ts |
+| 分层前情 | storySoFar（全书）→ arcSummary（本卷）→ 近4章 summary | retrieval.ts + recap |
+| 写后归档 | 抽取摘要/设定更新/伏笔/冲突，同名合并回填 | digest + applyDigest |
+| 去 AI 味 | 24 类反套路指令 + 黑名单词 + 负面清单 | prompts.ts (deAiBlock) |
+| 确认流 | 写操作→ChangeProposal→等用户确认→apply落库 | agent/runtime.ts |
+| 生成缓存 | generate_*产出存 ctx.generated→save_project 从缓存折叠 patch | agent/tools.ts |
+| 版本快照 | apply前对修改章节拍快照→支持 diff/rollback | history/store.ts |
+
+---
+
+## 8. 未完成功能（规划中，尚未实现）
+
+| 功能 | 现状 | 接口位置 |
+|------|------|----------|
+| 向量检索/语义召回 | 当前用子串+多因子打分，无 embedding | future-stubs.ts (EmbeddingProvider) |
+| 多人物关系图谱 | 设定库有数据基础但无可视化 | future-stubs.ts (RelationEdge, buildRelationGraph) |
+| 时间线视图 | CodexEntry.events 有数据但无独立视图 | future-stubs.ts (TimelineEvent, buildTimeline) |
+| 服务端密钥加密存储 | 当前 Key 仅存浏览器 localStorage | future-stubs.ts (SecretStore) |
+| SQLite 存储层 | 当前全 JSON 文件，大量作品时性能受限 | future-stubs.ts (SqliteRepository) |
+| 代码签名 | NSIS 安装包未签名（SmartScreen 会拦截） | package.json (signAndEditExecutable: false) |
+| asar 打包 | 当前 asar=false，文件可直接访问 | package.json (build.asar) |
+| 多语言支持 | 仅中文界面 | — |
+| 云同步/多端 | 架构已预留 ownerId 接缝但无实现 | auth.ts + repository.ts |
+
+---
+
+## 9. 预留接口详情（`lib/future-stubs.ts`）
+
+所有未实现功能已定义类型接口和工厂函数（调用时抛 `NotImplemented`），未来启用时实现并替换导出即可：
+
+```typescript
+// 向量检索
+interface EmbeddingProvider {
+  embed(text: string): Promise<number[]>;
+  search(query: string, topK: number): Promise<{ id: string; score: number }[]>;
+}
+function createEmbeddingProvider(): EmbeddingProvider;  // → transformers.js
+
+// 关系图谱 + 时间线
+interface RelationEdge { from: string; to: string; label: string; weight: number; }
+interface TimelineEvent { chapter: number; codexId: string; event: string; timestamp: number; }
+function buildRelationGraph(codex: CodexEntry[]): RelationEdge[];
+function buildTimeline(codex: CodexEntry[]): TimelineEvent[];
+
+// 服务端密钥库
+interface SecretStore {
+  get(ownerId: string, key: string): Promise<string | null>;
+  set(ownerId: string, key: string, value: string): Promise<void>;
+  delete(ownerId: string, key: string): Promise<void>;
+}
+function createSecretStore(): SecretStore;
+
+// SQLite 存储
+interface SqliteRepository {
+  query<T>(sql: string, params?: any[]): Promise<T[]>;
+  run(sql: string, params?: any[]): Promise<void>;
+}
+function createSqliteRepository(): SqliteRepository;
+```
+
+**扩展建议**：实现向量检索时只需替换 `retrieval.ts` 中 `selectRelevantCodex` 的打分部分，分层前情和核心条目恒定注入机制不受影响。
+
+---
+
+## 10. 开发指南
+
+### 10.1 快速开始
+
+```powershell
+npm install
+npm run dev          # http://localhost:3000（Web 开发）
+npm run electron:dev # Electron 窗口开发（连 localhost:3000）
+npm run app:build:win # 构建 Windows NSIS 安装包 → dist/
+```
+
+### 10.2 关键约定
+
+| 约定 | 说明 |
+|------|------|
+| 数据单一来源 | 改数据模型先动 `lib/types.ts`，`storage.ts` 的 `normalizeProject` 负责旧数据回填 |
+| 提示词集中 | 所有 prompt 在 `lib/prompts.ts`，与 UI 解耦 |
+| 检索确定性 | `retrieval.ts` 无向量/无额外 LLM 调用，纯子串匹配+打分 |
+| 函数式合并 | `patch((p) => updater(p))` 基于最新状态，勿用陈旧快照整体覆盖 |
+| SSR 守卫 | 客户端组件用 `mounted` 延迟渲染，防水合不一致 |
+| 无测试框架 | 验证以 `tsc --noEmit` + `npm run build` + 手动回归为准 |
+| PowerShell | 不支持 `&&`，多命令用 `;` 分隔 |
+| 端口错开 | 多实例开发时 `$env:PORT=3001` / `$env:PORT=3002` |
+
+### 10.3 新增功能的典型流程
+
+1. 在 `lib/types.ts` 添加数据类型
+2. 在 `lib/<module>/` 实现核心逻辑
+3. 在 `app/api/<route>/route.ts` 暴露 API
+4. 在 `components/<Panel>.tsx` 实现 UI
+5. 若涉及 Agent 工具：在 `lib/agent/tools.ts` 注册，在 `runtime.ts` 确认接入
+6. `npx tsc --noEmit` + `npm run build` 验证通过
+
+### 10.4 环境变量
+
+| 变量 | 作用 | 默认值 |
+|------|------|--------|
+| `NOVEL_DATA_ROOT` | 数据存储根目录 | `<userData>/data`（Electron） |
+| `PORT` | Next.js 监听端口 | 3000 |
+| `ELECTRON_BUILDER_BINARIES_MIRROR` | electron-builder 二进制镜像 | npmmirror（`app:build:win`） |
+
+### 10.5 构建与发布
 
 ```
-新建作品 → StepOutline 三步向导
-   第1步 填写 setup（可应用多张文风卡 styleCards）
-   第2步 → /api/generate/bible   → bible（写回 project）
-   第3步 → /api/generate/volumes → volumes（写回 project）
-   → 逐卷 /api/generate/volume → chapters 脉络
-   → 人工增删改分卷/章节脉络（可带方向重生，方向入提示词库）
-→ 进入 StepWriting 逐章：
-   buildChapterContext(检索设定/分层前情/伏笔) + enabledPrompts → /api/generate/chapter(流式) → 正文
-   → /api/generate/digest → applyDigest 回填 codex(含状态/事件时间线)/foreshadows/summary，并报告 conflicts 冲突
-   → refreshRecaps → /api/generate/recap 刷新卷级 arcSummary / 全书 storySoFar
-   → （重写章节时）/api/generate/reconcile → applyReconcile 统一下游已成稿
-→ 连续生成：runAuto 串行下传最新快照（working），逐章函数式合并写回，互不覆盖
-→ Workspace 防抖(900ms) PUT /api/projects/[id] 持久化（卸载前补 flush）
-→ 「导出」把全部已写章节拼为 .txt 下载
+npm run app:build:win
+  → next build (standalone)
+  → prepare-standalone (复制 .next/static + public/)
+  → electron-builder --win (NSIS installer)
+  → 产物: dist/墨章 Novel Atelier Setup x.y.z.exe (~145MB)
+```
+
+CI：推送 `v*` tag → GitHub Actions `windows-latest` 构建 → 上传到 Release。
+
+### 10.6 已知构建注意事项
+
+- **winCodeSign 符号链接**：Windows 无管理员权限时 darwin 符号链接创建失败。已通过 `signAndEditExecutable: false` 跳过 rcedit。若需恢复 exe 图标嵌入，需以管理员运行或启用开发者模式的符号链接权限。
+- **GitHub 下载超时**：`app:build:win` 已配置 npmmirror 镜像（`ELECTRON_BUILDER_BINARIES_MIRROR`），国内网络可正常构建。
+
+---
+
+## 11. Electron 桌面架构
+
+```
+启动流程:
+  app.whenReady()
+  → resolveDataRoot() (env > data-location.json > <userData>/data)
+  → buildMenu() (数据/编辑/视图菜单)
+  → registerIpcHandlers() (save-file IPC)
+  → createWindow()
+    → 开发: loadURL(http://localhost:3000)
+    → 生产: fork(.next/standalone/server.js, 随机端口) → waitForServer → loadURL
+
+IPC 接口:
+  save-file: 弹出原生保存对话框 + 写文件（用于导出）
+
+数据位置可迁移:
+  菜单「数据 → 更改数据存储位置…」→ 可选复制/仅切换 → 重启生效
 ```
 
 ---
 
-## 10. 约定与注意事项（给二次开发者）
+## 12. Agent 对话协议（供接入参考）
 
-- **数据结构单一来源**：改模型先动 `lib/types.ts`；`storage.ts` 的 `normalizeProject` 负责为旧存档回填新字段，加字段时记得在此兜底，避免旧作品报错。
-- **提示词集中在 `lib/prompts.ts`**：调风格/结构/约束在这里改，与 UI 解耦。
-- **检索是确定性的**：`retrieval.ts` 用子串匹配 + 多因子打分（相关/新近/重要度）而非 embedding；若要升级为向量检索，改写 `selectRelevantCodex` 打分部分即可，其核心条目恒定注入与分层前情（`storySoFar`/`volumeArc`）机制不受影响。
-- **SSR 水合**：`ProfileSwitcher` 等客户端专属组件用 `mounted` 守卫延迟渲染，改动时注意别引入水合不一致。
-- **不可变更新 + reindex**：增删卷/章后统一重排 `index` 保持序号连续。
-- **状态写回用函数式合并，勿用陈旧快照整体覆盖**：Workspace 的 `patch((p) => updater(p))` 基于最新状态叠加。在 async 循环（如连续生成）中切勿用闭包捕获的陈旧 `project` prop 算出整棵树再 `patch(() => snapshot)` 整体替换——会抹掉循环内先写的章节；应通过返回值串行下传最新快照。组件卸载前需 `flush` 补存，防 900ms 防抖窗口内离开丢正文。
-- **环境**：Windows PowerShell 不支持 `&&`，多命令用 `;`。中文写入源码建议用字面字符，避免手写 unicode 转义打错码点。
-- **无测试框架**：当前项目未内置单测；验证以 `npm run build` 通过 + 手动回归为主。
+**请求体** (`POST /api/agent/chat`)：
+```typescript
+{
+  config: ApiConfig,          // 模型配置
+  messages: ChatMessage[],    // 多轮历史
+  projectId?: string,         // 关联作品
+  confirmations?: ConfirmToken[], // 上轮确认/取消
+  skillId?: string,           // 技能模式
+  skillParams?: Record<string, any>
+}
+```
+
+**NDJSON 事件流**（每行一个 JSON）：
+```
+{"type":"text","delta":"..."}           # 文本增量
+{"type":"tool_call","name":"...","args":{}} # 工具调用
+{"type":"tool_result","name":"...","result":"..."} # 工具结果
+{"type":"proposal","proposal":{...}}    # 写操作提案（需确认）
+{"type":"error","message":"..."}        # 错误
+{"type":"done","sessionId":"..."}       # 结束
+```
 
 ---
 
-## 11. 可扩展方向（备忘）
+## 13. 数据流全景
 
-- 向量检索 / 语义召回替代关键词匹配，提升长程一致性。
-- 章节级版本历史与差异对比。
-- 多人物关系图谱、时间线视图。
-- 导出为 EPUB / Markdown / 分卷文件。
-- 生成任务队列与断点续跑、失败重试。
-- 服务端配置加密存储（当前 Key 仅存浏览器）。
+```
+创作流程:
+  新建 → StepOutline 三步向导 → StepWriting 逐章生成
+    ↓ 每章: buildChapterContext(检索+前情+伏笔) → generate → digest → recap
+    ↓ 重写时: reconcile 统一下游
+    ↓ Workspace 防抖 900ms → PUT /api/projects/[id]
+
+Agent 流程:
+  用户消息 → runtime.ts 工具循环 → 工具执行
+    → 只读: 直接返回结果
+    → 写操作: 产出 ChangeProposal → 等确认 → apply 落库
+    → 生成类: 结果存 ctx.generated → save_project 折叠缓存为 patch
+
+版本历史:
+  save_project.apply() 前 → saveSnapshot(修改的章节) → 正常落库
+
+导出:
+  GET /api/export?projectId=X&format=epub → 服务端组装 → 二进制流
+
+任务队列:
+  enqueue(TaskDefinition) → runner.start() → 逐 step 执行
+    → 每 step: runAgentTurn(skill mode, auto-approve)
+    → 失败: 指数退避重试 → 超限: status=failed
+    → 成功: checkpoint 持久化 → 全部完成: status=done
+```
 
 ---
 
-*本文件由项目梳理自动生成，供理解与二次加工参考。若结构有较大调整，请同步更新本文件。*
+---
+
+## 14. 关联文档
+
+| 文档 | 用途 |
+|------|------|
+| [README.md](./README.md) | 面向终端用户的安装/使用指南 |
+| [墨章对话Agent系统规范.md](./墨章对话Agent系统规范.md) | Agent 系统的原始设计规范（架构、接缝、工具定义、角色对话设计） |
+| [TASKBOARD.md](./TASKBOARD.md) | 阶段一开发看板（并行协作记录、验收实测细节、缺陷修复方案） |
+| [.github/workflows/release.yml](./.github/workflows/release.yml) | CI 自动构建与发布配置 |
+
+> **建议新接手的 Agent**：先读本文件获取全局认知，再按需查阅上述关联文档获取细节。遇到架构疑问优先查 `TASKBOARD.md` 中的实测记录和修复方案。
+
+---
+
+*本文件反映 v1.0.0 状态（2026-07）。结构有较大调整时请同步更新。*
