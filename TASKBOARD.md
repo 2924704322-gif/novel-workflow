@@ -184,11 +184,11 @@ interface ProjectRepository {
 - [x] T1/T2 通过后，§7 全部五项已改 `[x]` 并附实测结论。
 - [x] 提交本轮所有看板更新并推送 `origin/main`（含 T1 修复、T1 幂等复测、T2 桌面回归、§7.5 关闭）。
 
-### T4 · （可选，阶段二前置）补齐 D 组拆书学工具
-- [ ] 扩展 `AgentTool.group` 类型加 `"D"`。
-- [ ] 新增 `analyze_style`/`analyze_archive`（复用 `/api/style-analyze`、`/api/archive-analyze` 的 prompt 构造 + `completeChat`，服务端进程内直调，参照 B 组只读候选模式）。
-- [ ] 新增 `list_style_cards`/`list_archives`（只读，列 `data/styles`、`data/archives` 缓存目录）。
-- [ ] 注册进 `AGENT_TOOLS` 并 `npm run build` 通过。
+### T4 · （可选，阶段二前置）补齐 D 组拆书学工具｜✅ 已完成
+- [x] 扩展 `AgentTool.group` 类型加 `"D"`。
+- [x] 新增 `analyze_style`/`analyze_archive`（复用 `/api/style-analyze`、`/api/archive-analyze` 的 prompt 构造 + `completeChat`，服务端进程内直调，参照 B 组只读候选模式；返回归一化 camelCase `StyleAnalysis`/`ArchiveAnalysis`）。
+- [x] 新增 `list_style_cards`/`list_archives`（只读，列 `data/styles`、`data/archives` 缓存目录，返回摘要数组）。
+- [x] 注册进 `AGENT_TOOLS`（D 分组段落），`npx tsc --noEmit` + `npm run build` 均通过。
 
 ### 收尾完成判据（Definition of Done）
 - §7 全部为 `[x]`（含实测结论）；`npm run build` 与桌面打包均通过；`main` 已推送且工作区干净。
