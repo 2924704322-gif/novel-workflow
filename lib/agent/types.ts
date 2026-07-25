@@ -56,6 +56,8 @@ export interface AgentChatRequest {
   messages: ChatMessage[]; // 多轮对话历史
   projectId?: string; // 当前作品上下文（可空）
   confirmations?: ConfirmToken[]; // 上一轮提案的确认结果
+  skillId?: string; // 触发的技能 id（见 lib/agent/skills.ts）
+  skillParams?: Record<string, string>; // 技能参数（如 chapterId/volumeId）
 }
 
 // ---- 流式事件：/api/agent/chat 逐块回传（§3.2 响应） ----

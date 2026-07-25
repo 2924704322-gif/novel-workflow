@@ -18,7 +18,8 @@ import type {
   ChangeProposal,
   ChatMessage,
 } from "./types";
-import { TOOLS_BY_NAME, toolSchemas, type ToolContext } from "./tools";
+import { TOOLS_BY_NAME, toolSchemasFiltered, type ToolContext } from "./tools";
+import { SKILLS_BY_ID, type AgentSkill } from "./skills";
 import {
   deletePendingProposal,
   getPendingProposal,
@@ -59,8 +60,10 @@ interface OAIMessage {
 async function chatCompletion(
   cfg: ApiConfig,
   messages: OAIMessage[],
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  tools?: ReturnType<typeof toolSchemasFiltered>
 ): Promise<OAIMessage> {
+  const effectiveTools = tools ?? toolSchemasFiltered();
   const res = await fetch(completionsUrl(cfg), {
     method: "POST",
     headers: {
@@ -70,7 +73,7 @@ async function chatCompletion(
     body: JSON.stringify({
       model: cfg.model,
       messages,
-      tools: toolSchemas(),
+      tools: effectiveTools,
       tool_choice: "auto",
       temperature: cfg.temperature ?? 0.7,
       stream: false,
@@ -89,7 +92,7 @@ async function chatCompletion(
 
 // ---- 系统提示 -------------------------------------------------------------
 
-function systemPrompt(projectId?: string): string {
+function systemPrompt(projectId?: string, skill?: AgentSkill): string {
   const lines = [
     "你是「墨章」写作工作台的对话助手，帮助作者规划、生成与维护长篇小说。",
     "你可以调用平台提供的工具来读取/生成/写入作品数据：",
@@ -103,12 +106,23 @@ function systemPrompt(projectId?: string): string {
   ];
   if (projectId) lines.push(`当前会话已绑定作品 id：${projectId}。`);
   else lines.push("当前会话尚未绑定作品；涉及具体作品时先 list_projects 或让用户选书。");
+  // Skill 模式：追加技能专属指令，约束 Agent 行为。
+  if (skill) {
+    lines.push("");
+    lines.push("=== 当前技能模式 ===");
+    lines.push(skill.systemPromptOverride);
+  }
   return lines.join("\n");
 }
 
 // 把契约里的 ChatMessage 历史转成 OpenAI 消息序列。
-function toOAIMessages(history: ChatMessage[], projectId?: string): OAIMessage[] {
-  const out: OAIMessage[] = [{ role: "system", content: systemPrompt(projectId) }];
+function toOAIMessages(
+  history: ChatMessage[],
+  projectId?: string,
+  skill?: AgentSkill,
+  skillParams?: Record<string, string>
+): OAIMessage[] {
+  const out: OAIMessage[] = [{ role: "system", content: systemPrompt(projectId, skill) }];
   for (const m of history) {
     if (m.role === "tool") {
       // 历史里的工具消息以可读文本回喂（无需还原 tool_call_id）。
@@ -116,6 +130,13 @@ function toOAIMessages(history: ChatMessage[], projectId?: string): OAIMessage[]
       continue;
     }
     out.push({ role: m.role, content: m.content || "" });
+  }
+  // Skill 模式：若 history 中无用户手动输入（仅首次触发），自动注入技能首条指令。
+  if (skill && skillParams) {
+    const hasUserMsg = history.some((m) => m.role === "user" && m.content?.trim());
+    if (!hasUserMsg) {
+      out.push({ role: "user", content: skill.initialInstruction(skillParams) });
+    }
   }
   return out;
 }
@@ -127,6 +148,7 @@ function rid(): string {
 }
 
 const MAX_STEPS = 8;
+const MAX_STEPS_SKILL = 12; // Skill 模式预期步骤更多
 
 export interface RuntimeContext {
   ownerId: string;
@@ -141,6 +163,13 @@ export async function* runAgentTurn(
   rt: RuntimeContext,
   signal?: AbortSignal
 ): AsyncGenerator<AgentStreamEvent> {
+  // 解析 Skill（若有）。
+  const skill = req.skillId ? SKILLS_BY_ID[req.skillId] : undefined;
+  const tools = skill?.toolWhitelist
+    ? toolSchemasFiltered(skill.toolWhitelist)
+    : toolSchemasFiltered();
+  const stepLimit = skill ? MAX_STEPS_SKILL : MAX_STEPS;
+
   const toolCtx: ToolContext = {
     ownerId: rt.ownerId,
     config: req.config,
@@ -148,7 +177,7 @@ export async function* runAgentTurn(
     generated: {},
   };
 
-  const oai = toOAIMessages(req.messages, req.projectId);
+  const oai = toOAIMessages(req.messages, req.projectId, skill, req.skillParams);
 
   // 1) 先处理上一轮提案的确认结果（§3.5 跨轮桥接）。
   const confirmations = req.confirmations || [];
@@ -197,9 +226,9 @@ export async function* runAgentTurn(
 
   // 2) 模型工具循环。
   try {
-    for (let step = 0; step < MAX_STEPS; step++) {
+    for (let step = 0; step < stepLimit; step++) {
       if (signal?.aborted) return;
-      const msg = await chatCompletion(req.config, oai, signal);
+      const msg = await chatCompletion(req.config, oai, signal, tools);
       const calls = msg.tool_calls || [];
 
       // 模型可能同时带文本与工具调用。
@@ -309,7 +338,7 @@ export async function* runAgentTurn(
     // 超出步数上限。
     yield {
       type: "error",
-      message: `工具调用步数超过上限（${MAX_STEPS}），已停止本轮。`,
+      message: `工具调用步数超过上限（${stepLimit}），已停止本轮。`,
     };
     yield { type: "done" };
   } catch (err) {

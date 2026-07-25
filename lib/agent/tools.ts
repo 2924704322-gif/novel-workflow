@@ -938,3 +938,17 @@ export function toolSchemas() {
     },
   }));
 }
+
+// 按白名单过滤后的工具声明（Skill 模式使用）。whitelist 为空或 undefined 时返回全部。
+export function toolSchemasFiltered(whitelist?: string[]) {
+  if (!whitelist || whitelist.length === 0) return toolSchemas();
+  const allowed = new Set(whitelist);
+  return AGENT_TOOLS.filter((t) => allowed.has(t.name)).map((t) => ({
+    type: "function" as const,
+    function: {
+      name: t.name,
+      description: t.description,
+      parameters: t.parameters,
+    },
+  }));
+}

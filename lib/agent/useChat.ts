@@ -39,7 +39,9 @@ export interface UseChat {
   toolActivity: ToolActivity[];
   proposals: ChangeProposal[];
   error: string | null;
+  activeSkill: string | null; // 当前正在执行的技能名称（null=无）
   send: (text: string) => void;
+  runSkill: (skillId: string, skillParams: Record<string, string>) => void;
   confirm: (proposalId: string, approved: boolean) => void;
   stop: () => void;
   reset: () => void;
@@ -54,8 +56,11 @@ export function useChat(opts: UseChatOptions): UseChat {
   const [toolActivity, setToolActivity] = useState<ToolActivity[]>([]);
   const [proposals, setProposals] = useState<ChangeProposal[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [activeSkill, setActiveSkill] = useState<string | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
+  // 当前轮次的 skill 信息（ref 避免闭包抓旧值）。
+  const skillRef = useRef<{ id: string; params: Record<string, string> } | null>(null);
 
   // 跑一轮：把 history 发给传输层，逐条消费事件，done 时把助手回复固化进 messages。
   const runTurn = useCallback(
@@ -73,6 +78,7 @@ export function useChat(opts: UseChatOptions): UseChat {
         messages: history,
         projectId,
         ...(confirmations ? { confirmations } : {}),
+        ...(skillRef.current ? { skillId: skillRef.current.id, skillParams: skillRef.current.params } : {}),
       };
 
       let acc = "";
@@ -135,6 +141,11 @@ export function useChat(opts: UseChatOptions): UseChat {
         setStreamingText("");
         setToolActivity([]);
         abortRef.current = null;
+        // Skill 模式下：轮次结束后清除技能状态（除非有 proposal 待确认）。
+        if (skillRef.current) {
+          skillRef.current = null;
+          setActiveSkill(null);
+        }
       }
     },
     [config, projectId, transport]
@@ -150,6 +161,17 @@ export function useChat(opts: UseChatOptions): UseChat {
       void runTurn(next);
     },
     [messages, runTurn, streaming]
+  );
+
+  const runSkill = useCallback(
+    (skillId: string, skillParams: Record<string, string>) => {
+      if (streaming) return;
+      skillRef.current = { id: skillId, params: skillParams };
+      setActiveSkill(skillId);
+      // 技能首轮：history 为空（让 runtime 的 initialInstruction 自动注入）。
+      void runTurn([]);
+    },
+    [runTurn, streaming]
   );
 
   const confirm = useCallback(
@@ -181,7 +203,9 @@ export function useChat(opts: UseChatOptions): UseChat {
     toolActivity,
     proposals,
     error,
+    activeSkill,
     send,
+    runSkill,
     confirm,
     stop,
     reset,

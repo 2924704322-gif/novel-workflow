@@ -190,5 +190,15 @@ interface ProjectRepository {
 - [x] 新增 `list_style_cards`/`list_archives`（只读，列 `data/styles`、`data/archives` 缓存目录，返回摘要数组）。
 - [x] 注册进 `AGENT_TOOLS`（D 分组段落），`npx tsc --noEmit` + `npm run build` 均通过。
 
+### T5 · Skill 模块（技能层）｜✅ 已完成
+- [x] 新建 `lib/agent/skills.ts`：`SkillParam`/`AgentSkill` 类型 + 6 个内置技能（write-chapter / write-and-digest / plan-volumes / plan-volume-detail / reconcile-downstream / generate-recap）+ `SKILLS_REGISTRY` / `SKILLS_BY_ID` 导出。
+- [x] 扩展 `lib/agent/types.ts`：`AgentChatRequest` 增 `skillId?` + `skillParams?` 字段。
+- [x] 改 `lib/agent/tools.ts`：新增 `toolSchemasFiltered(whitelist?)` 按白名单过滤 function-calling schema。
+- [x] 改 `lib/agent/runtime.ts`：`systemPrompt` 支持 skill 注入（追加 `systemPromptOverride`）；工具白名单过滤生效；skill 模式 `MAX_STEPS_SKILL=12`。
+- [x] 新建 `components/SkillPicker.tsx`：按 writing/planning/maintenance 分组展示技能卡片 + 参数表单。
+- [x] 改 `components/AgentChat.tsx`：集成 SkillPicker 入口 + 技能执行状态 badge。
+- [x] 改 `lib/agent/useChat.ts`：新增 `runSkill(skillId, params)` 方法 + `activeSkill` 状态。
+- [x] `npx tsc --noEmit` + `npm run build` 均通过。
+
 ### 收尾完成判据（Definition of Done）
 - §7 全部为 `[x]`（含实测结论）；`npm run build` 与桌面打包均通过；`main` 已推送且工作区干净。

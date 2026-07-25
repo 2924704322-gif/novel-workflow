@@ -12,6 +12,8 @@ import { loadConfig, getApiBase } from "@/lib/client";
 import type { ChangeProposal, ChatMessage } from "@/lib/agent/types";
 import { useChat } from "@/lib/agent/useChat";
 import { httpChatStream, type ChatTransport } from "@/lib/agent/mockStream";
+import SkillPicker from "./SkillPicker";
+import { SKILLS_BY_ID } from "@/lib/agent/skills";
 
 export interface AgentChatProps {
   projectId?: string;
@@ -30,9 +32,10 @@ export default function AgentChat({ projectId, config, transport, onCollapse, fl
   );
 
   const chat = useChat({ config: resolvedConfig, transport: resolvedTransport, projectId });
-  const { messages, streaming, streamingText, toolActivity, proposals, error } = chat;
+  const { messages, streaming, streamingText, toolActivity, proposals, error, activeSkill } = chat;
 
   const [input, setInput] = useState("");
+  const [showSkills, setShowSkills] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // 新消息 / 流式增量 / 提案变化时滚到底部。
@@ -157,23 +160,50 @@ export default function AgentChat({ projectId, config, transport, onCollapse, fl
       </div>
 
       <div style={S.composer}>
-        <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={onKeyDown}
-          rows={2}
-          placeholder={streaming ? "助手正在回复…" : "说点什么…（Enter 发送，Shift+Enter 换行）"}
-          style={S.textarea}
-        />
-        {streaming ? (
-          <button className="btn btn--ghost" onClick={chat.stop}>
-            停止
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+          {showSkills && (
+            <SkillPicker
+              disabled={streaming}
+              onSelect={(id, params) => {
+                setShowSkills(false);
+                chat.runSkill(id, params);
+              }}
+            />
+          )}
+          {activeSkill && (
+            <div style={S.skillBadge}>
+              技能执行中：{SKILLS_BY_ID[activeSkill]?.name || activeSkill}
+            </div>
+          )}
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={onKeyDown}
+            rows={2}
+            placeholder={streaming ? "助手正在回复…" : "说点什么…（Enter 发送，Shift+Enter 换行）"}
+            style={S.textarea}
+          />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <button
+            className="btn btn--ghost btn--sm"
+            onClick={() => setShowSkills(!showSkills)}
+            disabled={streaming}
+            title="技能"
+            style={{ fontSize: 12 }}
+          >
+            {showSkills ? "收起" : "技能"}
           </button>
-        ) : (
-          <button className="btn btn--primary" onClick={submit} disabled={!input.trim()}>
-            发送
-          </button>
-        )}
+          {streaming ? (
+            <button className="btn btn--ghost btn--sm" onClick={chat.stop}>
+              停止
+            </button>
+          ) : (
+            <button className="btn btn--primary btn--sm" onClick={submit} disabled={!input.trim()}>
+              发送
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -363,6 +393,17 @@ const S: Record<string, React.CSSProperties> = {
     padding: 12,
     borderTop: "1px solid var(--line)",
     background: "rgba(250,244,231,0.6)",
+  },
+  skillBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "4px 10px",
+    borderRadius: 6,
+    background: "rgba(211,162,76,0.15)",
+    border: "1px solid rgba(211,162,76,0.3)",
+    fontSize: 12,
+    color: "var(--fg-dim)",
   },
   textarea: {
     flex: 1,
