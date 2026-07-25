@@ -11,7 +11,7 @@
 // user can relocate it to any disk via the "数据 → 更改数据存储位置…" menu; we
 // then persist only a tiny pointer file in userData.
 
-const { app, BrowserWindow, shell, dialog, Menu } = require("electron");
+const { app, BrowserWindow, shell, dialog, Menu, ipcMain } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const http = require("http");
@@ -265,6 +265,38 @@ async function createWindow() {
   });
 }
 
+// ── IPC Handlers ─────────────────────────────────────────────────────────────
+// Native file operations exposed via contextBridge (see preload.js).
+
+function registerIpcHandlers() {
+  // Save file: shows native save dialog, writes data to user-chosen path.
+  ipcMain.handle("save-file", async (_event, defaultName, data) => {
+    const ext = path.extname(defaultName).replace(".", "");
+    const filters = [];
+    if (ext === "epub") filters.push({ name: "EPUB 电子书", extensions: ["epub"] });
+    else if (ext === "md") filters.push({ name: "Markdown", extensions: ["md"] });
+    else if (ext === "txt") filters.push({ name: "纯文本", extensions: ["txt"] });
+    filters.push({ name: "所有文件", extensions: ["*"] });
+
+    const result = await dialog.showSaveDialog(mainWindow, {
+      title: "导出作品",
+      defaultPath: defaultName,
+      filters,
+    });
+
+    if (result.canceled || !result.filePath) {
+      return { success: false };
+    }
+
+    try {
+      fs.writeFileSync(result.filePath, Buffer.from(data));
+      return { success: true, filePath: result.filePath };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  });
+}
+
 function cleanup() {
   if (serverProcess) {
     try {
@@ -289,6 +321,7 @@ if (!gotLock) {
   app.whenReady().then(() => {
     currentDataRoot = resolveDataRoot();
     buildMenu();
+    registerIpcHandlers();
     createWindow();
   });
 

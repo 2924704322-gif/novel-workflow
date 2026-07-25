@@ -14,9 +14,10 @@
     "electron:dev": "concurrently -k \"next dev\" \"cross-env NODE_ENV=development wait-on http://localhost:3000 && electron electron/main.js\"",
     "prepare:standalone": "node scripts/prepare-standalone.mjs",
     "app:build": "next build && npm run prepare:standalone && electron-builder",
-    "app:build:win": "cross-env ELECTRON_CACHE=E:/.ecache ELECTRON_BUILDER_CACHE=E:/.ecache npm run app:build"
+    "app:build:win": "cross-env ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ npm run app:build"
   },
   "dependencies": {
+    "epub-gen-memory": "^1.1.2",
     "next": "^15.5.4",
     "react": "19.0.0",
     "react-dom": "19.0.0"
@@ -48,7 +49,8 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "build/icon.ico"
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": false,
