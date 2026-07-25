@@ -158,6 +158,21 @@ interface ProjectRepository {
   - [x] 续写草稿：`build_chapter_context → generate_chapter → save_project`，`changedKeys:[volumes]`，确认后首章 `content` 写回 4334 字、`status: empty→draft`。
 - 结论：**平台契约、确认流与三条生成链均已实测通过**（NDJSON 完整、取消不落库、确认落库幂等由 create_project + 各链 propose→confirm 复核）；「生成候选→落库」的模型中继 JSON 缺口已由方案 (b) 消除。**T1 达标，§7.3 可关闭。**
 
+**三链幂等 + 取消专项复测 ✅（2026-07-25，测试作品 `mrz9m057xmmjg`，setup=玄幻/听草玉，事后已删）**
+> 逐链验证：`propose → 取消(approved=false)不落库 → 重新生成 → 确认(approved=true)落库 → 重复确认同一 proposalId`。
+
+| 链 | 取消不落库 | 确认落库 | 重复确认（幂等） |
+|----|:---:|:---:|:---:|
+| `generate_bible→save_project` | ✅ `bible` 仍 `null` | ✅ logline+9 人物、`title→木语仙踪` | ✅ `提案已失效或不存在：<id>`，数据未变 |
+| `generate_volumes→save_project` | ✅ `volumes` 仍 0 | ✅ 3 卷落库 | ✅ 同上，仍 3 卷 |
+| `generate_chapter→save_project` | ✅ `content` 仍空、`empty` | ✅ 正文 3365 字、`status: empty→draft` | ✅ 同上，正文未变 |
+
+- **取消**：事件流 `tool_result(discarded:"用户已取消该写操作")/text/done`，DB 完全未变。
+- **确认**：`apply` 落库后 `deletePendingProposal` 删除提案文件。
+- **重复确认**：`getPendingProposal` 返回 `null` → 发 `error` 事件 `提案已失效或不存在：<id>`，数据不被二次应用——方案 (b) 新增的非空嵌套 patch（bible/volumes/chapter）同样满足「确认一次 = 落库一次」。
+- 过程注记：模型偶发「只用文本叙述而未真正触发工具」（`tools:[]`、无 `proposal`），补发强制指令后即正常发起工具调用——属模型行为，非平台缺陷。
+- 清理：测试作品已删（`data/projects` 恢复 8 部）、残留提案清空（`data/proposals` 为 0）。
+
 ### T2 · 桌面单 exe 回归｜阻塞验收 §7.5
 - [ ] `npm run app:build:win`（或 `app:build`）构建 NSIS 安装包成功。
 - [ ] 安装/启动后：数据存储位置沿用现有自定义逻辑（`NOVEL_DATA_ROOT` / 菜单改路径）不变。
