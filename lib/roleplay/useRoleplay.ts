@@ -6,7 +6,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import type { ApiConfig } from "../types";
-import type { RoleplayMessage, RoleplayRequest, RoleplayStreamEvent } from "./types";
+import type { RoleplayCharacterCard, RoleplayMessage, RoleplayRequest, RoleplayStreamEvent, TurnMode } from "./types";
 
 export interface UseRoleplayOptions {
   config: ApiConfig;
@@ -15,6 +15,9 @@ export interface UseRoleplayOptions {
   apiBase?: string;              // 默认空（相对路径）
   initialMessages?: RoleplayMessage[];
   sessionId?: string;
+  // 多角色扩展
+  participants?: RoleplayCharacterCard[];
+  turnMode?: TurnMode;
 }
 
 export interface UseRoleplay {
@@ -23,9 +26,11 @@ export interface UseRoleplay {
   streamingText: string;
   error: string | null;
   sessionId: string | null;
+  nextSpeaker: string | null;      // 多角色：下一位发言者名称
   send: (text: string) => void;
   stop: () => void;
   reset: () => void;
+  setNextSpeaker: (codexId: string) => void;  // manual 模式下指定发言者
 }
 
 function generateMsgId(): string {
@@ -33,13 +38,15 @@ function generateMsgId(): string {
 }
 
 export function useRoleplay(opts: UseRoleplayOptions): UseRoleplay {
-  const { config, projectId, characterId, apiBase = "", initialMessages = [], sessionId: initSessionId } = opts;
+  const { config, projectId, characterId, apiBase = "", initialMessages = [], sessionId: initSessionId, participants, turnMode } = opts;
 
   const [messages, setMessages] = useState<RoleplayMessage[]>(initialMessages);
   const [streaming, setStreaming] = useState(false);
   const [streamingText, setStreamingText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(initSessionId || null);
+  const [nextSpeaker, setNextSpeakerState] = useState<string | null>(null);
+  const targetCharRef = useRef<string | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
 
@@ -58,6 +65,9 @@ export function useRoleplay(opts: UseRoleplayOptions): UseRoleplay {
         characterId,
         messages: history,
         sessionId: sessionId || undefined,
+        participants,
+        turnMode,
+        targetCharacterId: targetCharRef.current || undefined,
       };
 
       let acc = "";
@@ -99,6 +109,7 @@ export function useRoleplay(opts: UseRoleplayOptions): UseRoleplay {
                   break;
                 case "done":
                   if (ev.sessionId) setSessionId(ev.sessionId);
+                  if (ev.nextSpeaker) setNextSpeakerState(ev.nextSpeaker);
                   break;
                 case "error":
                   setError(ev.message);
@@ -139,7 +150,7 @@ export function useRoleplay(opts: UseRoleplayOptions): UseRoleplay {
         abortRef.current = null;
       }
     },
-    [config, projectId, characterId, apiBase, sessionId]
+    [config, projectId, characterId, apiBase, sessionId, participants, turnMode]
   );
 
   const send = useCallback(
@@ -169,6 +180,12 @@ export function useRoleplay(opts: UseRoleplayOptions): UseRoleplay {
     setStreamingText("");
     setError(null);
     setSessionId(null);
+    setNextSpeakerState(null);
+    targetCharRef.current = null;
+  }, []);
+
+  const setNextSpeaker = useCallback((codexId: string) => {
+    targetCharRef.current = codexId;
   }, []);
 
   return {
@@ -177,8 +194,10 @@ export function useRoleplay(opts: UseRoleplayOptions): UseRoleplay {
     streamingText,
     error,
     sessionId,
+    nextSpeaker,
     send,
     stop,
     reset,
+    setNextSpeaker,
   };
 }

@@ -6,8 +6,8 @@
 //   - RoleplaySession：一次角色对话会话（持久化为 JSON）
 //   - RoleplayRequest / RoleplayStreamEvent：API 请求/响应契约
 //
-// 数据结构预留多角色扩展：participants 为数组，activeCharacterId 标明当前
-// 对话的单一角色（1v1），未来可支持多角色轮转。
+// 数据结构支持多角色轮转：participants 为数组，turnMode 控制轮转策略，
+// activeCharacterId 标明当前回合的发言角色。
 
 import type { ApiConfig, CodexEntry } from "../types";
 
@@ -30,10 +30,15 @@ export type RoleplayRole = "user" | "character" | "system";
 export interface RoleplayMessage {
   id: string;
   role: RoleplayRole;
-  characterId?: string;  // role=character 时指明是哪个角色说的（多角色预留）
+  characterId?: string;  // role=character 时指明是哪个角色说的（多角色区分）
   content: string;
   createdAt: number;
 }
+
+// ---- 轮转策略 ----
+
+/** 多角色对话的轮转模式。 */
+export type TurnMode = "manual" | "round-robin" | "narrator-driven";
 
 // ---- 会话 ----
 
@@ -41,8 +46,11 @@ export interface RoleplaySession {
   id: string;
   ownerId: string;
   projectId: string;              // 绑定的作品
-  participants: RoleplayCharacterCard[];  // 参与角色（1v1 时只有一个，预留多角色）
-  activeCharacterId: string;      // 当前 1v1 对话的角色 codexId
+  participants: RoleplayCharacterCard[];  // 参与角色（1个=1v1，多个=群聊）
+  activeCharacterId: string;      // 当前回合的发言角色 codexId
+  turnMode: TurnMode;             // 轮转策略
+  turnOrder: string[];            // codexId 数组，round-robin 的轮转顺序
+  nextSpeakerIndex: number;       // round-robin 时的当前指针
   messages: RoleplayMessage[];
   createdAt: number;
   updatedAt: number;
@@ -53,12 +61,16 @@ export interface RoleplaySession {
 export interface RoleplayRequest {
   config: ApiConfig;
   projectId: string;
-  characterId: string;           // 对话角色的 codexId
+  characterId: string;           // 1v1 时的对话角色 codexId
   messages: RoleplayMessage[];   // 多轮历史
   sessionId?: string;            // 续写已有会话（可选）
+  // 多角色扩展
+  participants?: RoleplayCharacterCard[];  // 多角色参与者列表
+  turnMode?: TurnMode;                    // 轮转策略
+  targetCharacterId?: string;             // manual 模式下指定下一位发言者
 }
 
 export type RoleplayStreamEvent =
   | { type: "text"; delta: string }         // 角色回复增量
-  | { type: "done"; sessionId: string }     // 本轮结束，返回落库的 sessionId
+  | { type: "done"; sessionId: string; nextSpeaker?: string }  // 本轮结束
   | { type: "error"; message: string };     // 出错

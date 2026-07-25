@@ -22,11 +22,13 @@ export interface PersonaContext {
  * @param project     当前作品（获取 codex、bible.tone）
  * @param character   对话角色卡
  * @param messages    对话历史（用于检索世界书相关条目）
+ * @param otherParticipants  多角色模式下的其他在场角色（可选）
  */
 export function assemblePersona(
   project: Project,
   character: RoleplayCharacterCard,
-  messages: RoleplayMessage[]
+  messages: RoleplayMessage[],
+  otherParticipants?: RoleplayCharacterCard[]
 ): PersonaContext {
   // ---- 1. 角色人设段 ----
   const charEntry = project.codex.find((e) => e.id === character.codexId);
@@ -77,6 +79,17 @@ export function assemblePersona(
   const tone = project.bible?.tone?.trim() || "";
   const toneBlock = tone ? `## 叙事文风\n${tone}` : "";
 
+  // ---- 4. 其他在场角色（多角色模式） ----
+  const othersBlock =
+    otherParticipants && otherParticipants.length > 0
+      ? [
+          `## 在场的其他角色`,
+          ...otherParticipants.map(
+            (p) => `- ${p.name}${p.status ? `（${p.status}）` : ""}：${p.summary.slice(0, 60)}`
+          ),
+        ].join("\n")
+      : "";
+
   // ---- 组装 system prompt ----
   const systemPrompt = [
     `你正在进行一场沉浸式角色扮演对话。你扮演作品「${project.title}」中的角色。`,
@@ -85,6 +98,8 @@ export function assemblePersona(
     `回复长度适中（50~300字），保持对话节奏感。可以包含动作描写（用*斜体*标注）。`,
     "",
     personaBlock,
+    "",
+    othersBlock,
     "",
     toneBlock,
     "",

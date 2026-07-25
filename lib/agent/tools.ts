@@ -325,9 +325,28 @@ const save_project: AgentTool = {
   },
   apply: async (args, ctx) => {
     const p = await loadProject(ctx, args.projectId);
+    const patch = (args.patch as Partial<Project>) || {};
+
+    // 版本历史：落库前对被修改的章节拍快照
+    if (patch.volumes) {
+      const { saveSnapshot } = await import("@/lib/history/store");
+      for (let vi = 0; vi < p.volumes.length; vi++) {
+        const oldVol = p.volumes[vi];
+        const newVol = patch.volumes[vi];
+        if (!newVol) continue;
+        for (const oldCh of oldVol.chapters) {
+          if (!oldCh.content) continue; // 空章节不需要快照
+          const newCh = newVol.chapters?.find((c: Chapter) => c.id === oldCh.id);
+          if (newCh && newCh.content !== oldCh.content) {
+            await saveSnapshot(p.id, oldCh.id, vi, oldCh, "agent");
+          }
+        }
+      }
+    }
+
     const merged: Project = {
       ...p,
-      ...((args.patch as Partial<Project>) || {}),
+      ...patch,
       id: p.id,
       createdAt: p.createdAt,
     };
