@@ -210,5 +210,18 @@ interface ProjectRepository {
 - [x] 改 `components/AgentPanel.tsx`：双 Tab 面板（助手/角色对话），从 URL pathname 推断 projectId，角色对话 Tab 仅作品页可用。
 - [x] `npx tsc --noEmit` + `npm run build` 均通过，`/api/agent/roleplay` 路由已注册。
 
+### T7 · 阶段三 · Skill 端到端验证 + route 修复｜✅ 已完成
+> 实测于当前会话，`localhost:3000` + 真实模型 `deepseek-v4-flash`。
+
+**发现并修复的缺陷：**
+- `app/api/agent/chat/route.ts` 构建 request 时**遗漏 `skillId`/`skillParams`** 字段传递 → 模型在 skill 模式下退化为普通对话。已修复（+2 行）。
+
+**修复后「一键续写」全链验证 ✅（作品 `mrx9zcj9xfno8`，章 `mrxd808769k5` "淫神的试炼"）：**
+- [x] 工具链正确执行：`build_chapter_context`(8834 chars) → `generate_chapter`(6937 字) → `save_project(fromGenerated:["chapter"])`
+- [x] Proposal 产出：`mrzqsd1kl4l4gl`，tool=`save_project`，changeSummary="保存作品…更新字段 volumes"
+- [x] 工具白名单生效：技能模式下仅暴露 4 个工具（get_project/build_chapter_context/generate_chapter/save_project），模型未尝试调用白名单外工具
+- [x] 确认落库：confirm(approved=true) 后章节 status `empty→draft`、wordCount `0→6937`、content 已写入
+- [x] 全过程 ~72s（3 次 LLM 调用 + IO）
+
 ### 收尾完成判据（Definition of Done）
 - §7 全部为 `[x]`（含实测结论）；`npm run build` 与桌面打包均通过；`main` 已推送且工作区干净。

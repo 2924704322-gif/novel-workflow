@@ -40,6 +40,8 @@ export async function POST(req: NextRequest) {
     messages: Array.isArray(body.messages) ? body.messages : [],
     projectId: body.projectId,
     confirmations: body.confirmations,
+    skillId: body.skillId,
+    skillParams: body.skillParams,
   };
 
   const encoder = new TextEncoder();
