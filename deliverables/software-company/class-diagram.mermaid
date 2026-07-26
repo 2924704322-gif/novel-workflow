@@ -1,0 +1,86 @@
+classDiagram
+    class StudioProvider {
+      +selectedBookId: string|null
+      +rightMode: closed|book|tavern
+      +rightSeg: page->seg
+      +chat: UseChat
+      +openBook(id)
+      +openTavern()
+      +toggleRight()
+      +switchSeg(page, seg)
+      +confirmMd(draft): Promise~void~
+    }
+    class ChatStudio {
+      +CreateBar
+      +messages stream
+      +Composer + PlusPanel
+      +InDialogModal
+    }
+    class LeftNav {
+      +navTavern()
+      +bookCards[]
+      +collapseRail()
+    }
+    class RightDock {
+      +pageBook: BookDetail
+      +pageTavern: TavernDetail
+    }
+    class BookDetail {
+      +renderResult()
+      +renderReader()  %% 方格稿纸
+      +renderDocList()
+    }
+    class TavernDetail {
+      +renderResult()
+      +seedTavernChat()
+    }
+    class HitlMdCard {
+      +fileName: string
+      +kind: chapter|setting
+      +mdEditor: textarea
+      +confirm() cancel() regen()
+    }
+    class UseChat {
+      +messages
+      +streaming
+      +proposals: ChangeProposal[]
+      +send(text)
+      +confirm(id, approved)
+    }
+    class ChangeProposal {
+      +id: string
+      +tool: string
+      +changeSummary: string
+      +md: MdDraft
+    }
+    class MdDraft {
+      +fileName: string
+      +kind: chapter|setting
+      +settingKind: DocKind
+      +targetChapterId: string
+      +body: string
+    }
+    class DocsStore {
+      +list(projectId): DocMeta[]
+      +read(projectId, name): DocRecord
+      +save(projectId, name, body, kind)
+      +remove(projectId, name)
+    }
+    class ProjectRepository {
+      +get(ownerId, id): Project
+      +save(ownerId, project): Project
+      +applyChapterContent(id, volId, chId, body)
+    }
+
+    StudioProvider "1" --> "1" ChatStudio : renders
+    StudioProvider "1" --> "1" LeftNav : renders
+    StudioProvider "1" --> "1" RightDock : renders
+    ChatStudio ..> UseChat : uses
+    ChatStudio ..> HitlMdCard : per proposal
+    HitlMdCard ..> StudioProvider : confirmMd()
+    RightDock *-- BookDetail
+    RightDock *-- TavernDetail
+    BookDetail ..> DocsStore : read docs
+    BookDetail ..> ProjectRepository : chapter content
+    UseChat ..> ChangeProposal : emits
+    ChangeProposal *-- MdDraft

@@ -1,0 +1,60 @@
+sequenceDiagram
+    actor U as 用户
+    participant CB as CreateBar
+    participant CS as ChatStudio
+    participant UC as useChat
+    participant API as /api/agent/chat
+    participant RT as Agent runtime
+    participant SD as StudioProvider
+    participant RD as RightDock/BookDetail
+    participant DS as DocsStore
+    participant PR as ProjectRepository
+
+    U->>CB: 点「世界观」chip
+    CB->>CS: genFromType("world")
+    CS->>UC: send("生成《X》世界观 .md")
+    UC->>API: POST(messages, projectId)
+    API->>RT: 工具循环(读 bible/codex)
+    RT-->>API: proposal{ md: MdDraft, changeSummary }
+    API-->>UC: stream event "proposal"
+    UC->>CS: proposals.push(proposal)
+    CS->>CS: 渲染 HitlMdCard(可编辑 textarea)
+    U->>CS: 在 textarea 改 .md
+    U->>CS: 点「确认写入」
+    CS->>SD: confirmMd(draft)
+    SD->>API: confirm(id, approved=true)
+    API->>RT: 执行写入
+    alt kind === "chapter"
+        RT->>PR: 解析 targetChapterId → chapter.content = body
+        PR-->>RT: saved
+        RT-->>API: done
+        SD->>RD: switchSeg("book","reader") + fillReaderFromMd(body)
+    else kind === "setting"
+        RT->>DS: save(projectId, name, body, kind)
+        DS-->>RT: saved
+        RT->>PR: syncDocsToBible(project, draft)
+        RT-->>API: done
+        SD->>RD: switchSeg("book","doc") + openDoc(name)
+    end
+    RD-->>U: 右栏展示（阅读 或 文档）
+
+    Note over U,RD: 点书架 → 书详情 → 切阅读/文档
+    U->>LeftNav: 点书架某书 card
+    LeftNav->>SD: openBook(id)
+    SD->>SD: selectedBookId=id; rightMode="book"
+    SD->>RD: 显示 #page-book + renderBookResult
+    RD->>PR: 读取 project(梗概/章节/标签)
+    PR-->>RD: 成果数据
+    U->>RD: 切「阅读」
+    RD->>SD: switchSeg("book","reader")
+    SD->>RD: 显示 Reader(方格稿纸)
+    U->>RD: 切「文档」
+    RD->>SD: switchSeg("book","doc")
+    RD->>DS: list(projectId)
+    DS-->>RD: DocMeta[]
+    U->>RD: 点某 .md
+    RD->>DS: read(projectId, name)
+    DS-->>RD: DocRecord.body
+    RD-->>U: Markdown 渲染阅读器
+    U->>RD: 收起 chevron
+    RD->>SD: toggleRight() → rightMode="closed"

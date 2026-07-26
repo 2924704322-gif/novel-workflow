@@ -1,0 +1,87 @@
+classDiagram
+    class CharacterCardV2 {
+      +spec: "chara_card_v2"
+      +spec_version: "2.0"
+      +data: CardData
+      +extensions.novelchat: {codexId, pinned, status, projectId}
+    }
+    class CardData {
+      +name: string
+      +description: string
+      +personality: string
+      +scenario: string
+      +first_mes: string
+      +mes_example: string
+      +system_prompt: string
+      +alternate_greetings: string[]
+      +character_book?: Lorebook
+      +tags: string[]
+      +creator: string
+    }
+    class Lorebook {
+      +id: string
+      +name: string
+      +scan_depth: number
+      +token_budget: number
+      +recursive_scanning: boolean
+      +entries: LorebookEntry[]
+      +novelchat: {projectId?, characterId?, kind}
+    }
+    class LorebookEntry {
+      +id: string
+      +keys: string[]
+      +content: string
+      +enabled: boolean
+      +insertion_order: number
+      +constant: boolean
+      +selective: boolean
+      +secondary_keys: string[]
+      +position: before_char|after_char
+      +novelchat.sourceDoc?: string
+    }
+    class RoleplayGroup {
+      +id: string
+      +name: string
+      +members: string[]
+      +disabledMembers: string[]
+      +activationStrategy: manual|list|natural|pooled
+      +generationMode: swap|append
+      +scenarioOverride?: string
+      +greeting?: string
+    }
+    class TavernStore {
+      +listCharacters(ownerId): CardMeta[]
+      +readCharacter(codexId): CharacterCardV2
+      +saveCharacter(card): void
+      +listLorebooks(ownerId, projectId): Lorebook[]
+      +saveLorebook(book): void
+      +listGroups(ownerId, projectId): RoleplayGroup[]
+      +saveGroup(g): void
+    }
+    class RoleplayRuntime {
+      +runRoleplayTurn(req)
+      +runGroupTurn(req)
+      +assembleRoleContext(project, speaker, msgs, opts)
+    }
+    class LorebookEngine {
+      +scanLorebook(entries, msgs, opts): ScannedEntry[]
+      +matchKey(haystack, key, cs): boolean
+    }
+    class CodexEntry {
+      +id: string
+      +name: string
+      +category: "人物"
+      +summary: string
+      +status: string
+      +pinned: boolean
+    }
+
+    CharacterCardV2 *-- CardData
+    CharacterCardV2 ..> Lorebook : character_book
+    Lorebook *-- LorebookEntry
+    RoleplayRuntime ..> LorebookEngine : scan
+    RoleplayRuntime ..> TavernStore : load card/lorebook/group
+    RoleplayRuntime ..> CodexEntry : fallback(codexId)
+    TavernStore ..> CharacterCardV2
+    TavernStore ..> Lorebook
+    TavernStore ..> RoleplayGroup

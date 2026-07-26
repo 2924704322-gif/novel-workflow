@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Novel&Chat · 主界面原型 v4（纯对话工作台 / + 展开器）</title>
+<style>
+  :root{
+    --bg:#f6f7f9;
+    --surface:#ffffff;
+    --surface-2:#f1f3f5;
+    --surface-3:#e9edf0;
+    --border:rgba(27,31,36,0.10);
+    --border-strong:rgba(27,31,36,0.16);
+    --fg:#1f2328;
+    --fg-dim:#656d76;
+    --fg-faint:#8b949e;
+    --accent:#d97757;
+    --accent-strong:#b85c3c;
+    --accent-soft:rgba(217,119,87,0.12);
+    --jade:#3f9d6b;
+    --jade-soft:rgba(63,157,107,0.14);
+    --amber:#d9a23c;
+    --amber-soft:rgba(217,162,60,0.14);
+    --danger:#e5484d;
+    --danger-soft:rgba(229,72,77,0.12);
+    --paper:#fbfaf6;
+    --paper-line:rgba(27,31,36,0.06);
+    --radius:10px;
+    --radius-sm:8px;
+    --radius-pill:999px;
+    --shadow-sm:0 1px 3px rgba(27,31,36,0.06);
+    --shadow-md:0 6px 20px rgba(27,31,36,0.10);
+    --font-ui:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    --font-serif:"Noto Serif SC","Songti SC","SimSun",serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;}
+  body{
+    font-family:var(--font-ui);
+    color:var(--fg);
+    background:var(--bg);
+    font-size:14px;
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    overflow:hidden;
+  }
+  ::-webkit-scrollbar{width:9px;height:9px;}
+  ::-webkit-scrollbar-thumb{background:var(--surface-3);border-radius:999px;border:2px solid transparent;background-clip:content-box;}
+  ::-webkit-scrollbar-thumb:hover{background:var(--border-strong);background-clip:content-box;}
+  button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;}
+  svg{display:block;}
+
+  /* ---------- App shell ---------- */
+  .app{display:flex;flex-direction:column;height:100vh;}
+  .topbar{
+    height:52px;flex:0 0 52px;display:flex;align-items:center;gap:12px;
+    padding:0 14px;background:var(--surface);border-bottom:1px solid var(--border);
+    z-index:30;
+  }
+  .brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px;letter-spacing:.2px;}
+  .brand .mark{
+    width:26px;height:26px;border-radius:7px;display:grid;place-items:center;
+    background:linear-gradient(135deg,var(--accent),var(--accent-strong));color:#fff;font-weight:800;font-size:13px;
+    box-shadow:var(--shadow-sm);
+  }
+  .brand small{font-weight:500;color:var(--fg-faint);font-size:11.5px;margin-left:2px;}
+  .topbar .spacer{flex:1;}
+  .icon-btn{
+    width:34px;height:34px;border-radius:var(--radius-sm);display:grid;place-items:center;color:var(--fg-dim);
+    transition:.15s;
+  }
+  .icon-btn:hover{background:var(--surface-2);color:var(--fg);}
+  .pill{
+    display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:var(--radius-pill);
+    background:var(--surface-2);color:var(--fg-dim);font-size:13px;border:1px solid var(--border);transition:.15s;
+  }
+  .pill:hover{background:var(--surface-3);color:var(--fg);}
+  .pill svg{width:15px;height:15px;}
+
+  .body{flex:1;display:flex;min-height:0;}
+
+  /* ---------- Left workbench (simplified nav) ---------- */
+  .left{
+    width:248px;flex:0 0 248px;background:var(--surface);border-right:1px solid var(--border);
+    display:flex;flex-direction:column;transition:width .22s ease,flex-basis .22s ease;overflow:hidden;
+  }
+  .left.collapsed{width:56px;flex-basis:56px;}
+  .left-head{
+    height:46px;flex:0 0 46px;display:flex;align-items:center;gap:8px;padding:0 10px;border-bottom:1px solid var(--border);
+  }
+  .left-head .title{font-weight:650;font-size:13.5px;white-space:nowrap;}
+  .left-head .collapse{margin-left:auto;}
+  .left.collapsed .left-head .title{display:none;}
+  .left.collapsed .left-head{justify-content:center;padding:0;}
+
+  .left-content{flex:1;overflow-y:auto;padding:12px 10px 16px;}
+  .left.collapsed .left-content{display:none;}
+  .nav-list{display:flex;flex-direction:column;gap:2px;margin-bottom:14px;}
+  .nav-item{
+    display:flex;align-items:center;gap:10px;height:38px;padding:0 10px;border-radius:var(--radius-sm);
+    color:var(--fg-dim);font-size:13.5px;transition:.15s;
+  }
+  .nav-item:hover{background:var(--surface-2);color:var(--fg);}
+  .nav-item.active{background:var(--accent-soft);color:var(--accent-strong);font-weight:600;}
+  .nav-item svg{width:18px;height:18px;flex:0 0 18px;color:var(--fg-faint);}
+  .nav-item:hover svg{color:var(--accent);}
+  .nav-item.active svg{color:var(--accent-strong);}
+
+  .section-label{font-size:11px;font-weight:650;color:var(--fg-faint);text-transform:uppercase;letter-spacing:.6px;margin:4px 6px 8px;}
+
+  .book-card{
+    display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--radius-sm);border:1px solid transparent;
+    cursor:pointer;transition:.15s;margin-bottom:4px;
+  }
+  .book-card:hover{background:var(--surface-2);}
+  .book-card.active{background:var(--accent-soft);border-color:rgba(217,119,87,0.35);}
+  .book-card .bc-title{font-size:13px;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .book-card .bc-meta{font-size:11px;color:var(--fg-faint);}
+  .dot{width:8px;height:8px;border-radius:50%;flex:0 0 8px;}
+  .dot.write{background:var(--jade);}
+  .dot.skeleton{background:var(--amber);}
+  .dot.brew{background:var(--fg-faint);}
+  .book-card .bc-info{display:flex;flex-direction:column;min-width:0;flex:1;}
+
+  /* left collapsed rail */
+  .left-rail{display:none;flex-direction:column;align-items:center;gap:6px;padding-top:12px;}
+  .left.collapsed .left-rail{display:flex;}
+  .rail-btn{width:38px;height:38px;border-radius:var(--radius-sm);display:grid;place-items:center;color:var(--fg-faint);transition:.15s;}
+  .rail-btn:hover{background:var(--surface-2);color:var(--accent);}
+  .rail-btn.active{background:var(--accent-soft);color:var(--accent-strong);}
+  .rail-sep{width:24px;height:1px;background:var(--border);margin:6px 0;}
+
+  /* ---------- Center: pure AI chat ---------- */
+  .center{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg);position:relative;}
+  .center-head{
+    height:46px;flex:0 0 46px;display:flex;align-items:center;gap:10px;padding:0 16px;border-bottom:1px solid var(--border);background:var(--surface);
+  }
+  .center-head .ch-title{font-weight:650;font-size:14px;}
+  .center-head .ch-sub{font-size:12px;color:var(--fg-faint);}
+  .center-head .spacer{flex:1;}
+  .ghost-btn{height:32px;padding:0 12px;border-radius:var(--radius-sm);border:1px solid var(--border);color:var(--fg-dim);font-size:13px;display:inline-flex;align-items:center;gap:6px;transition:.15s;white-space:nowrap;}
+  .ghost-btn:hover{background:var(--surface-2);color:var(--fg);border-color:var(--border-strong);}
+  .ghost-btn svg{width:15px;height:15px;}
+
+  .center-views{flex:1;min-height:0;display:flex;}
+  .cview{display:none;flex:1;min-height:0;flex-direction:column;}
+  .cview.active{display:flex;}
+
+  /* creation bar — 加强对话工作强度 */
+  .create-bar{display:flex;align-items:center;gap:8px;padding:9px 16px;border-bottom:1px solid var(--border);background:var(--surface);flex-wrap:wrap;}
+  .create-bar .cb-label{font-size:12px;color:var(--fg-faint);margin-right:2px;}
+  .create-chip{height:30px;padding:0 12px;border-radius:var(--radius-pill);border:1px solid var(--border);background:var(--surface-2);color:var(--fg-dim);font-size:12.5px;display:inline-flex;align-items:center;gap:6px;transition:.15s;}
+  .create-chip:hover{background:var(--accent-soft);border-color:rgba(217,119,87,0.35);color:var(--accent-strong);}
+  .create-chip svg{width:14px;height:14px;}
+
+  .chat{flex:1;overflow-y:auto;padding:22px 0;display:flex;flex-direction:column;gap:16px;}
+  .chat-inner{max-width:820px;width:100%;margin:0 auto;padding:0 24px;display:flex;flex-direction:column;gap:16px;}
+
+  .msg{display:flex;gap:11px;max-width:100%;}
+  .msg.user{flex-direction:row-reverse;}
+  .avatar{width:30px;height:30px;border-radius:50%;flex:0 0 30px;display:grid;place-items:center;font-size:12px;font-weight:700;color:#fff;}
+  .avatar.ai{background:linear-gradient(135deg,var(--accent),var(--accent-strong));}
+  .avatar.me{background:var(--surface-3);color:var(--fg-dim);border:1px solid var(--border);}
+  .bubble{max-width:78%;padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.65;box-shadow:var(--shadow-sm);}
+  .msg.ai .bubble{background:var(--surface);border:1px solid var(--border);border-top-left-radius:4px;}
+  .msg.user .bubble{background:var(--accent-soft);border:1px solid rgba(217,119,87,0.28);border-top-right-radius:4px;color:var(--fg);}
+
+  .tool-row{display:flex;flex-wrap:wrap;gap:7px;padding-left:41px;}
+  .chip-act{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:var(--radius-pill);font-size:12px;border:1px solid var(--border);background:var(--surface);color:var(--fg-dim);}
+  .chip-act .spin{width:11px;height:11px;border:2px solid var(--amber);border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite;}
+  .chip-act.done{color:var(--jade);border-color:rgba(63,157,107,0.3);background:var(--jade-soft);}
+  .chip-act.done svg{width:13px;height:13px;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* HITL editable .md proposal card */
+  .hitl{margin-left:41px;max-width:calc(100% - 41px);border:1px solid var(--border-strong);border-radius:var(--radius);background:var(--surface);box-shadow:var(--shadow-sm);overflow:hidden;}
+  .hitl-head{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--amber-soft);font-size:13px;color:var(--accent-strong);border-bottom:1px solid var(--border);flex-wrap:wrap;}
+  .hitl-head svg{width:16px;height:16px;flex:0 0 16px;}
+  .hitl-label{font-weight:600;}
+  .hitl-head .file-name{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;font-weight:600;color:var(--fg);}
+  .type-badge{display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 9px;border-radius:var(--radius-pill);font-size:11.5px;font-weight:600;white-space:nowrap;}
+  .type-badge.gold{background:var(--amber-soft);color:var(--amber);}
+  .type-badge.jade{background:var(--jade-soft);color:var(--jade);}
+  .type-badge.accent{background:var(--accent-soft);color:var(--accent-strong);}
+  .hitl-desc{font-size:12.5px;color:var(--fg-dim);line-height:1.6;padding:10px 14px 6px;}
+  .md-editor{
+    width:calc(100% - 28px);margin:0 14px 4px;min-height:158px;border:1px solid var(--border);border-radius:var(--radius-sm);
+    padding:11px 12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;line-height:1.7;color:var(--fg);
+    background:var(--surface-2);resize:vertical;outline:none;
+  }
+  .md-editor:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);background:var(--surface);}
+  .hitl-actions{display:flex;gap:9px;padding:11px 14px;border-top:1px solid var(--border);align-items:center;}
+  .written-note{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--jade);font-weight:600;}
+  .btn-primary{height:34px;padding:0 16px;border-radius:var(--radius-sm);background:var(--accent);color:#fff;font-size:13px;font-weight:600;transition:.15s;box-shadow:var(--shadow-sm);}
+  .btn-primary:hover{background:var(--accent-strong);}
+  .btn-ghost{height:34px;padding:0 16px;border-radius:var(--radius-sm);border:1px solid var(--border);color:var(--fg-dim);font-size:13px;transition:.15s;}
+  .btn-ghost:hover{background:var(--surface-2);color:var(--fg);}
+
+  /* composer + plus expander */
+  .composer{flex:0 0 auto;padding:12px 16px 16px;border-top:1px solid var(--border);background:var(--surface);position:relative;}
+  .composer-inner{max-width:820px;margin:0 auto;}
+  .composer-box{border:1px solid var(--border-strong);border-radius:14px;background:var(--surface);padding:10px 12px;transition:.15s;}
+  .composer-box:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);}
+  .composer textarea{width:100%;border:none;outline:none;resize:none;font-family:inherit;font-size:14px;line-height:1.6;color:var(--fg);background:transparent;height:44px;max-height:140px;}
+  .composer-bar{display:flex;align-items:center;gap:8px;margin-top:8px;}
+  .plus-btn{width:32px;height:32px;border-radius:50%;border:1px solid var(--border);font-size:19px;font-weight:600;color:var(--fg-dim);flex:0 0 32px;display:grid;place-items:center;line-height:1;transition:.15s;}
+  .plus-btn:hover{background:var(--accent-soft);color:var(--accent-strong);border-color:var(--accent);}
+  .plus-btn svg{width:18px;height:18px;}
+  .skill-chip{height:28px;padding:0 10px;border-radius:var(--radius-pill);border:1px solid var(--border);color:var(--fg-dim);font-size:12px;display:inline-flex;align-items:center;gap:5px;transition:.15s;}
+  .skill-chip:hover{background:var(--surface-2);color:var(--fg);}
+  .skill-chip svg{width:13px;height:13px;}
+  .composer-bar .send{margin-left:auto;}
+
+  /* plus expander panel (WorkBuddy-style quick actions) */
+  .plus-panel{position:absolute;bottom:calc(100% - 2px);left:16px;right:16px;margin:0 auto;max-width:820px;background:var(--surface);border:1px solid var(--border-strong);border-radius:14px;box-shadow:var(--shadow-md);padding:14px;display:none;z-index:45;}
+  .plus-panel.open{display:block;}
+  .pp-title{font-size:11px;font-weight:650;color:var(--fg-faint);text-transform:uppercase;letter-spacing:.5px;margin:0 4px 11px;}
+  .pp-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;}
+  .pp-item{display:flex;flex-direction:column;align-items:center;gap:8px;padding:13px 8px;border:1px solid var(--border);border-radius:12px;background:var(--surface);transition:.15s;cursor:pointer;}
+  .pp-item:hover{border-color:rgba(217,119,87,0.4);background:var(--accent-soft);transform:translateY(-2px);}
+  .pp-item .pp-ic{width:38px;height:38px;border-radius:10px;background:var(--accent-soft);color:var(--accent-strong);display:grid;place-items:center;flex:0 0 38px;}
+  .pp-item .pp-ic svg{width:19px;height:19px;}
+  .pp-item .pp-label{font-size:12.5px;font-weight:550;color:var(--fg);text-align:center;}
+
+  /* skill popover */
+  .skill-pop{position:absolute;bottom:74px;left:50%;transform:translateX(-50%);width:340px;background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--radius);box-shadow:var(--shadow-md);padding:10px;display:none;z-index:46;}
+  .skill-pop.open{display:block;}
+  .skill-pop h4{font-size:12px;color:var(--fg-faint);text-transform:uppercase;letter-spacing:.5px;margin:4px 6px 8px;}
+  .skill-opt{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--radius-sm);transition:.15s;}
+  .skill-opt:hover{background:var(--surface-2);}
+  .skill-opt .so-ic{width:30px;height:30px;border-radius:8px;background:var(--accent-soft);color:var(--accent-strong);display:grid;place-items:center;flex:0 0 30px;}
+  .skill-opt .so-name{font-size:13px;font-weight:550;}
+  .skill-opt .so-desc{font-size:11.5px;color:var(--fg-faint);}
+
+  /* in-dialog modal (settings / skills) */
+  .modal-overlay{position:absolute;inset:0;background:rgba(27,31,36,0.32);display:none;align-items:center;justify-content:center;z-index:60;backdrop-filter:blur(1px);}
+  .modal-overlay.open{display:flex;}
+  .modal{width:min(680px,92%);max-height:86%;background:var(--surface);border-radius:14px;box-shadow:var(--shadow-md);display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--border-strong);}
+  .modal-head{height:50px;flex:0 0 50px;display:flex;align-items:center;gap:10px;padding:0 16px;border-bottom:1px solid var(--border);font-weight:650;font-size:15px;}
+  .modal-head .icon-btn{margin-left:auto;}
+  .modal-body{flex:1;overflow-y:auto;padding:20px;}
+  .mpane{display:none;}
+  .mpane.active{display:block;}
+  .modal-inner{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:14px;}
+
+  .set-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow-sm);}
+  .set-card > .c-kicker{font-size:11px;font-weight:650;color:var(--accent-strong);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;display:flex;align-items:center;gap:5px;}
+  .set-row{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--border);}
+  .set-row:last-child{border-bottom:none;}
+  .set-row .sr-label{font-size:13.5px;font-weight:550;}
+  .set-row .sr-desc{font-size:12px;color:var(--fg-faint);margin-top:2px;}
+  .set-row .spacer{flex:1;}
+  .field{flex:1;max-width:320px;height:34px;border:1px solid var(--border-strong);border-radius:8px;padding:0 11px;font-size:13px;font-family:inherit;background:var(--surface);color:var(--fg);}
+  .field:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);}
+  .skill-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;}
+  .skill-card{border:1px solid var(--border);background:var(--surface);border-radius:14px;padding:16px;display:flex;gap:12px;align-items:flex-start;}
+  .skill-card .sc-ic{width:38px;height:38px;border-radius:10px;background:var(--accent-soft);color:var(--accent-strong);display:grid;place-items:center;flex:0 0 38px;}
+  .skill-card .sc-ic svg{width:19px;height:19px;}
+  .skill-card .sc-title{font-size:14px;font-weight:600;}
+  .skill-card .sc-desc{font-size:12.5px;color:var(--fg-dim);margin-top:3px;line-height:1.5;}
+
+  /* ---------- Right display space (normally blank/collapsed) ---------- */
+  .right{
+    width:380px;flex:0 0 380px;background:var(--surface);border-left:1px solid var(--border);
+    display:flex;flex-direction:column;transition:width .22s ease,flex-basis .22s ease;overflow:hidden;position:relative;
+  }
+  .right.collapsed{width:0;flex-basis:0;border-left:none;overflow:visible;}
+  /* 每个详情页是完全独立的视图（book / tavern 互不嵌套、互不共享表头） */
+  .detail-page{display:none;flex:1;min-height:0;flex-direction:column;}
+  .right.book #page-book{display:flex;}
+  .right.tavern #page-tavern{display:flex;}
+  .detail-head{height:46px;flex:0 0 46px;display:flex;align-items:center;gap:8px;padding:0 10px;border-bottom:1px solid var(--border);}
+  .detail-head .rh-title{font-weight:650;font-size:13.5px;white-space:nowrap;}
+  .seg{display:none;background:var(--surface-2);border-radius:var(--radius-pill);padding:3px;gap:2px;margin-left:6px;}
+  .detail-page .seg{display:inline-flex;}
+  .seg button{height:26px;padding:0 11px;border-radius:var(--radius-pill);font-size:12px;color:var(--fg-dim);transition:.15s;white-space:nowrap;}
+  .seg button.active{background:var(--surface);color:var(--fg);box-shadow:var(--shadow-sm);font-weight:600;}
+  .detail-head .collapse{margin-left:auto;}
+  .detail-content{flex:1;overflow-y:auto;padding:14px;min-height:0;}
+  .right.collapsed .detail-page{display:none;}
+  /* collapsed: floating rail tab at screen-right edge (no layout space) */
+  .right-rail{
+    display:none;position:absolute;top:50%;right:0;transform:translateY(-50%);
+    flex-direction:column;align-items:center;gap:6px;padding:10px 5px;
+    background:var(--surface);border:1px solid var(--border);border-right:none;
+    border-radius:10px 0 0 10px;box-shadow:var(--shadow-sm);z-index:15;
+  }
+  .right.collapsed .right-rail{display:flex;}
+  .pane-r{display:none;}
+  .pane-r.active{display:block;}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:13px 14px;margin-bottom:12px;box-shadow:var(--shadow-sm);}
+  .card .c-kicker{font-size:11px;font-weight:650;color:var(--accent-strong);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;display:flex;align-items:center;gap:5px;}
+  .card .c-title{font-size:14px;font-weight:650;margin-bottom:5px;}
+  .card .c-body{font-size:13px;color:var(--fg-dim);line-height:1.65;}
+  .ch-list{display:flex;flex-direction:column;gap:2px;margin-top:4px;}
+  .ch-row{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:var(--radius-sm);font-size:12.5px;color:var(--fg-dim);}
+  .ch-row:hover{background:var(--surface-2);}
+  .ch-row .ch-st{margin-left:auto;font-size:11px;}
+  .ch-row .done{color:var(--jade);}
+  .ch-row .draft{color:var(--amber);}
+  .meta-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;}
+  .mtag{font-size:11.5px;padding:3px 9px;border-radius:var(--radius-pill);background:var(--surface-2);color:var(--fg-dim);border:1px solid var(--border);}
+
+  /* reader (grid paper) */
+  .reader{height:100%;display:flex;flex-direction:column;}
+  .reader-head{padding:2px 2px 12px;border-bottom:1px solid var(--border);margin-bottom:14px;}
+  .reader-head .r-vol{font-size:12px;color:var(--accent-strong);font-weight:600;}
+  .reader-head .r-title{font-family:var(--font-serif);font-size:21px;font-weight:700;margin-top:3px;}
+  .reader-body{
+    flex:1;font-family:var(--font-serif);font-size:16px;line-height:28px;color:#3a2e24;
+    background-color:var(--paper);
+    background-image:
+      linear-gradient(var(--paper-line) 1px,transparent 1px),
+      linear-gradient(90deg,var(--paper-line) 1px,transparent 1px);
+    background-size:28px 28px;background-position:0 4px;
+    border-radius:var(--radius-sm);padding:18px 20px;overflow-y:auto;white-space:pre-wrap;
+  }
+  .reader-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--fg-faint);gap:10px;text-align:center;padding:30px;}
+  .reader-empty svg{width:40px;height:40px;opacity:.5;}
+
+  /* document view (.md) */
+  .doc-list{display:flex;flex-direction:column;gap:8px;}
+  .doc-card{display:flex;align-items:center;gap:11px;padding:11px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);cursor:pointer;transition:.15s;}
+  .doc-card:hover{border-color:var(--border-strong);box-shadow:var(--shadow-sm);}
+  .doc-ic{width:34px;height:34px;border-radius:9px;background:var(--accent-soft);color:var(--accent-strong);display:grid;place-items:center;flex:0 0 34px;}
+  .doc-ic svg{width:18px;height:18px;}
+  .doc-meta{min-width:0;flex:1;}
+  .doc-name{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
+  .doc-sub{font-size:11.5px;color:var(--fg-faint);margin-top:1px;}
+  .doc-card .chev{color:var(--fg-faint);flex:0 0 16px;}
+
+  .doc-reader{height:100%;display:none;flex-direction:column;}
+  .doc-reader.open{display:flex;}
+  .doc-reader-head{display:flex;align-items:center;gap:10px;padding:2px 2px 12px;border-bottom:1px solid var(--border);margin-bottom:12px;}
+  .doc-back{height:30px;padding:0 12px;border-radius:var(--radius-sm);border:1px solid var(--border);color:var(--fg-dim);font-size:12.5px;display:inline-flex;align-items:center;gap:5px;transition:.15s;white-space:nowrap;}
+  .doc-back:hover{background:var(--surface-2);color:var(--fg);}
+  .doc-back svg{width:14px;height:14px;}
+  .doc-reader-title{font-size:14px;font-weight:650;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
+  .doc-reader-head .type-badge{margin-left:auto;}
+  .doc-reader-body{font-size:14px;line-height:1.78;color:var(--fg);}
+  .doc-reader-body h1{font-size:19px;margin:2px 0 10px;padding-bottom:7px;border-bottom:1px solid var(--border);}
+  .doc-reader-body h2{font-size:16px;margin:18px 0 8px;}
+  .doc-reader-body h3{font-size:14px;margin:14px 0 6px;color:var(--fg-dim);}
+  .doc-reader-body p{margin:0 0 10px;color:var(--fg-dim);}
+  .doc-reader-body ul{margin:0 0 10px;padding-left:20px;}
+  .doc-reader-body li{margin:3px 0;color:var(--fg-dim);}
+  .doc-reader-body strong{color:var(--fg);font-weight:650;}
+  .doc-reader-body em{color:var(--accent-strong);font-style:normal;}
+  .doc-reader-body blockquote{margin:0 0 10px;padding:7px 12px;border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 var(--radius-sm) var(--radius-sm) 0;color:var(--fg-dim);}
+  .doc-reader-body code{font-family:ui-monospace,monospace;background:var(--surface-2);padding:1px 5px;border-radius:4px;font-size:12.5px;}
+  .doc-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--fg-faint);gap:10px;text-align:center;padding:30px;}
+  .doc-empty svg{width:40px;height:40px;opacity:.5;}
+
+  .right-handle{display:none;}
+
+  /* toast */
+  .toast{
+    position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--fg);color:#fff;padding:10px 18px;border-radius:var(--radius-pill);font-size:13px;
+    box-shadow:var(--shadow-md);opacity:0;pointer-events:none;transition:.25s;z-index:100;display:flex;align-items:center;gap:8px;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  .toast svg{width:16px;height:16px;color:var(--jade);}
+
+  .prototag{position:fixed;top:60px;right:14px;font-size:11px;color:var(--fg-faint);background:var(--surface);border:1px solid var(--border);padding:4px 10px;border-radius:var(--radius-pill);z-index:50;}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ===== Top bar ===== -->
+  <div class="topbar">
+    <button class="icon-btn" onclick="toggleLeft()" title="收起/展开工作台">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <div class="brand"><span class="mark">N</span>Novel&Chat<small>· AI 写作</small></div>
+    <div class="spacer"></div>
+    <button class="pill" title="模型接口档">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3v18M5 8l7-5 7 5M5 16l7 5 7-5"/></svg>
+      默认·Claude
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+    <button class="icon-btn" onclick="toggleRight()" title="收起/展开展示空间">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg>
+    </button>
+  </div>
+
+  <div class="body">
+    <!-- ===== Left workbench (simplified nav) ===== -->
+    <aside class="left" id="left">
+      <div class="left-head">
+        <span class="title">工作台</span>
+        <button class="icon-btn collapse" onclick="toggleLeft()" title="收起">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M15 6l-6 6 6 6"/></svg>
+        </button>
+      </div>
+
+      <div class="left-content">
+        <nav class="nav-list">
+          <div class="nav-item" id="navTavern" onclick="openTavern()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+            酒馆AI
+          </div>
+        </nav>
+        <div class="section-label">书架</div>
+        <div class="book-card active" onclick="openBook(this)">
+          <span class="dot write"></span>
+          <div class="bc-info"><span class="bc-title">长夜行</span><span class="bc-meta">在写 · 32/120章</span></div>
+        </div>
+        <div class="book-card" onclick="openBook(this)">
+          <span class="dot skeleton"></span>
+          <div class="bc-info"><span class="bc-title">山海拾遗</span><span class="bc-meta">搭骨架 · 分卷中</span></div>
+        </div>
+        <div class="book-card" onclick="openBook(this)">
+          <span class="dot brew"></span>
+          <div class="bc-info"><span class="bc-title">春山旧梦</span><span class="bc-meta">酝酿 · 一句话立意</span></div>
+        </div>
+      </div>
+
+      <!-- collapsed: icon rail -->
+      <div class="left-rail">
+        <button class="rail-btn" title="酒馆AI" onclick="expandLeft();openTavern()">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        </button>
+        <div class="rail-sep"></div>
+        <button class="rail-btn active" title="书架" onclick="expandLeft()">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 4h11l3 3v13H5z"/></svg>
+        </button>
+      </div>
+    </aside>
+
+    <!-- ===== Center: pure AI chat ===== -->
+    <main class="center">
+      <div class="center-head" id="centerHead">
+        <div>
+          <div class="ch-title" id="chTitle">创作工作台</div>
+          <div class="ch-sub" id="chSub">《长夜行》· 续写</div>
+        </div>
+        <div class="spacer"></div>
+        <button class="ghost-btn" onclick="resetChat()" title="清空并开始新对话">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 4v6h6M20 20v-6h-6"/><path d="M20 9A8 8 0 0 0 6.5 6.5M4 15A8 8 0 0 0 17.5 17.5"/></svg>
+          新对话
+        </button>
+      </div>
+
+      <div class="center-views">
+        <!-- 唯一的视图：AI 对话 -->
+        <section class="cview active" id="view-chat">
+          <!-- 快速创作栏：加强对话框工作强度 -->
+          <div class="create-bar">
+            <span class="cb-label">快速创作</span>
+            <button class="create-chip" onclick="genFromType('world')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg>
+              世界观
+            </button>
+            <button class="create-chip" onclick="genFromType('character')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+              人物设定
+            </button>
+            <button class="create-chip" onclick="genFromType('outline')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+              大纲
+            </button>
+            <button class="create-chip" onclick="genFromType('chapter')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 4h13l3 3v13H4z"/><path d="M8 12h8M8 16h6"/></svg>
+              章节
+            </button>
+          </div>
+
+          <div class="chat">
+            <div class="chat-inner" id="chatLog">
+              <div class="msg user">
+                <div class="avatar me">我</div>
+                <div class="bubble">第 3 章「长夜微光」帮我接着写，主角在雨夜收到一封没有署名的旧信，氛围要安静、克制一点。</div>
+              </div>
+              <div class="msg ai">
+                <div class="avatar ai">N</div>
+                <div class="bubble">好的，我先读取本书大纲与卷一设定，保持人物与基调一致，再为你生成第 3 章草稿。下面是我准备落笔的方向，确认后写入右侧展示空间（.md）。</div>
+              </div>
+              <div class="tool-row">
+                <span class="chip-act done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 13l4 4L19 7"/></svg>已读取《长夜行》大纲</span>
+                <span class="chip-act done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 13l4 4L19 7"/></svg>已对齐卷一人物设定</span>
+                <span class="chip-act done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 13l4 4L19 7"/></svg>已生成 第 3 章草稿</span>
+              </div>
+
+              <!-- 可编辑 .md HITL 提案卡 -->
+              <div class="hitl" data-kind="chapter" data-body="# 第 3 章 长夜微光
+
+门廊的灯坏了半边，雨丝斜着打在青石板上，像谁在门外犹豫着，又不肯进来。
+
+她弯腰拾起那封信，纸角已经被水洇开，只剩一个模糊的火漆印——是一朵她认得、却想不起在哪见过的花。
+
+「没有名字的人，往往留下的东西最多。」她这样想，却没有出声。
+
+楼上的钟敲了十二下，长夜才刚刚开始。她把信折好，放进抽屉最深处，仿佛那样就能把来路也一并收起来。">
+                <div class="hitl-head">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/></svg>
+                  <span class="hitl-label">待确认写入</span>
+                  <span class="file-name">第3章_长夜微光.md</span>
+                  <span class="type-badge gold">章节草稿</span>
+                </div>
+                <div class="hitl-desc">AI 已生成第 3 章草稿，可直接在下方修改，确认后写入项目（.md）并落到右侧「阅读」。</div>
+                <textarea class="md-editor" spellcheck="false"># 第 3 章 长夜微光
+
+门廊的灯坏了半边，雨丝斜着打在青石板上，像谁在门外犹豫着，又不肯进来。
+
+她弯腰拾起那封信，纸角已经被水洇开，只剩一个模糊的火漆印——是一朵她认得、却想不起在哪见过的花。
+
+「没有名字的人，往往留下的东西最多。」她这样想，却没有出声。
+
+楼上的钟敲了十二下，长夜才刚刚开始。她把信折好，放进抽屉最深处，仿佛那样就能把来路也一并收起来。</textarea>
+                <div class="hitl-actions">
+                  <button class="btn-ghost" onclick="regen(this)">重新生成</button>
+                  <button class="btn-ghost" onclick="cancelProp(this)">取消</button>
+                  <button class="btn-primary" onclick="confirmProp(this)">确认写入</button>
+                </div>
+              </div>
+
+              <div class="msg ai" id="aiFollow" style="display:none">
+                <div class="avatar ai">N</div>
+                <div class="bubble">已写入项目，右侧展示空间已更新。需要我继续打磨某一段，或生成卷二脉络吗？</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- composer + 「+」展开器 -->
+          <div class="composer">
+            <div class="composer-inner">
+              <div class="plus-panel" id="plusPanel">
+                <div class="pp-title">快速开始</div>
+                <div class="pp-grid">
+                  <button class="pp-item" onclick="quickAction('new')">
+                    <div class="pp-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 5v14M5 12h14"/></svg></div>
+                    <div class="pp-label">开一本新书</div>
+                  </button>
+                  <button class="pp-item" onclick="quickAction('continue')">
+                    <div class="pp-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 20l4-1 12-12-3-3L5 16z"/></svg></div>
+                    <div class="pp-label">续写</div>
+                  </button>
+                  <button class="pp-item" onclick="quickAction('workshop')">
+                    <div class="pp-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 19V5l8 4 8-4v14l-8 4z"/></svg></div>
+                    <div class="pp-label">拆书工坊</div>
+                  </button>
+                  <button class="pp-item" onclick="openModal('settings')">
+                    <div class="pp-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></div>
+                    <div class="pp-label">接口设置</div>
+                  </button>
+                  <button class="pp-item" onclick="openModal('skills')">
+                    <div class="pp-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4z"/><path d="M18 14l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg></div>
+                    <div class="pp-label">技能</div>
+                  </button>
+                </div>
+              </div>
+              <div class="composer-box">
+                <textarea id="composerInput" placeholder="对《长夜行》说点什么…（如：把第 3 章结尾再收一下）"></textarea>
+                <div class="composer-bar">
+                  <button class="plus-btn" onclick="togglePlus(event)" title="更多能力">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>
+                  </button>
+                  <button class="skill-chip" onclick="toggleSkill(event)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 20l4-1 12-12-3-3L5 16z"/></svg>续写</button>
+                  <button class="skill-chip" onclick="toggleSkill(event)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8"/></svg>润色</button>
+                  <button class="skill-chip" onclick="toggleSkill(event)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3v18M5 8l7-5 7 5"/></svg>一致性检查</button>
+                  <button class="btn-primary send" onclick="sendMsg()">发送</button>
+                </div>
+              </div>
+            </div>
+            <!-- skill popover -->
+            <div class="skill-pop" id="skillPop">
+              <h4>写作技能</h4>
+              <div class="skill-opt"><div class="so-ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 20l4-1 12-12-3-3L5 16z"/></svg></div><div><div class="so-name">续写章节</div><div class="so-desc">基于大纲与上下文生成下一章</div></div></div>
+              <div class="skill-opt"><div class="so-ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8"/></svg></div><div><div class="so-name">润色打磨</div><div class="so-desc">保持人设，优化节奏与语感</div></div></div>
+              <div class="skill-opt"><div class="so-ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3v18M5 8l7-5 7 5"/></svg></div><div><div class="so-name">一致性检查</div><div class="so-desc">核对人物/伏笔/设定冲突</div></div></div>
+              <div class="skill-opt"><div class="so-ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 19V5l8 4 8-4v14l-8 4z"/></svg></div><div><div class="so-name">搭骨架</div><div class="so-desc">从立意生成分卷与章节脉络</div></div></div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- 对话框内模态：接口设置 / 技能库 -->
+      <div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this)closeModal()">
+        <div class="modal">
+          <div class="modal-head">
+            <span id="modalTitle">接口设置</span>
+            <button class="icon-btn" onclick="closeModal()" title="关闭">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+            </button>
+          </div>
+          <div class="modal-body">
+            <!-- 接口设置 -->
+            <div class="mpane active" id="mpane-settings">
+              <div class="modal-inner">
+                <div class="set-card">
+                  <div class="c-kicker">📡 模型与接口</div>
+                  <div class="set-row">
+                    <div><div class="sr-label">默认模型</div><div class="sr-desc">用于续写、润色与生成</div></div>
+                    <div class="spacer"></div>
+                    <select class="field" style="max-width:200px"><option>Claude · 默认</option><option>GPT · 长上下文</option><option>本地 · 轻量</option></select>
+                  </div>
+                  <div class="set-row">
+                    <div><div class="sr-label">API Key</div><div class="sr-desc">仅存于本地，不上云</div></div>
+                    <div class="spacer"></div>
+                    <input class="field" type="password" value="sk-••••••••••••••••••" />
+                  </div>
+                  <div class="set-row">
+                    <div><div class="sr-label">接口地址</div><div class="sr-desc">留空使用内置默认</div></div>
+                    <div class="spacer"></div>
+                    <input class="field" value="https://api.novelchat.local/v1" />
+                  </div>
+                </div>
+                <div class="set-card">
+                  <div class="c-kicker">🎚 生成参数</div>
+                  <div class="set-row">
+                    <div><div class="sr-label">温度</div><div class="sr-desc">越高越发散，越低越稳</div></div>
+                    <div class="spacer"></div>
+                    <input class="field" style="max-width:120px" value="0.8" />
+                  </div>
+                  <div class="set-row">
+                    <div><div class="sr-label">单次最大长度</div><div class="sr-desc">章节生成上限（字）</div></div>
+                    <div class="spacer"></div>
+                    <input class="field" style="max-width:120px" value="4000" />
+                  </div>
+                </div>
+                <div class="set-card">
+                  <div class="c-kicker">💾 保存</div>
+                  <div class="set-row" style="border:none;padding-top:0;">
+                    <div class="sr-desc">修改后记得保存，否则下次启动会回退。</div>
+                    <div class="spacer"></div>
+                    <button class="btn-primary" onclick="closeModal();toast('接口设置已保存（原型示意）')">保存设置</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- 技能库 -->
+            <div class="mpane" id="mpane-skills">
+              <div class="modal-inner">
+                <div class="skill-grid">
+                  <div class="skill-card"><div class="sc-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 20l4-1 12-12-3-3L5 16z"/></svg></div><div><div class="sc-title">续写章节</div><div class="sc-desc">基于大纲与上下文生成下一章</div></div></div>
+                  <div class="skill-card"><div class="sc-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8"/></svg></div><div><div class="sc-title">润色打磨</div><div class="sc-desc">保持人设，优化节奏与语感</div></div></div>
+                  <div class="skill-card"><div class="sc-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3v18M5 8l7-5 7 5"/></svg></div><div><div class="sc-title">一致性检查</div><div class="sc-desc">核对人物/伏笔/设定冲突</div></div></div>
+                  <div class="skill-card"><div class="sc-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 19V5l8 4 8-4v14l-8 4z"/></svg></div><div><div class="sc-title">搭骨架</div><div class="sc-desc">从立意生成分卷与章节脉络</div></div></div>
+                  <div class="skill-card"><div class="sc-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div><div><div class="sc-title">人物设定</div><div class="sc-desc">生成可写入 .md 的人物卡</div></div></div>
+                  <div class="skill-card"><div class="sc-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg></div><div><div class="sc-title">世界观生成</div><div class="sc-desc">构建时代/地理/核心设定</div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- ===== Right display space (normally blank/collapsed) ===== -->
+    <aside class="right collapsed" id="right">
+      <!-- ===== 书籍详情页（完全独立） ===== -->
+      <section class="detail-page" id="page-book">
+        <header class="detail-head">
+          <span class="rh-title" id="rhTitleBook">《长夜行》</span>
+          <div class="seg">
+            <button class="active" data-seg="result" onclick="switchSeg('book','result')">成果</button>
+            <button data-seg="reader" onclick="switchSeg('book','reader')">阅读</button>
+            <button data-seg="doc" onclick="switchSeg('book','doc')">文档</button>
+          </div>
+          <button class="icon-btn collapse" onclick="toggleRight()" title="收起">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M9 6l6 6-6 6"/></svg>
+          </button>
+        </header>
+        <div class="detail-content">
+          <div class="pane-r active" id="pane-book-result">
+            <div class="card">
+              <div class="c-kicker">📌 一句话立意</div>
+              <div class="c-title">长夜行</div>
+              <div class="c-body">一个在雨夜里反复收到无名旧信的女人，借由这些信，重新拼凑出自己不愿记起的过去。</div>
+            </div>
+            <div class="card">
+              <div class="c-kicker">📖 梗概</div>
+              <div class="c-body">抗战末年的江南小城，沈寄收到第一封没有署名的信。信里写着的，是只有死去多年的人才知道的事。她被迫在长夜中回望，而每一封信，都让真相更近一步，也更危险一步。</div>
+            </div>
+            <div class="card">
+              <div class="c-kicker">🗂 章节列表</div>
+              <div class="ch-list">
+                <div class="ch-row"><span>第 1 章 雨夜来客</span><span class="ch-st done">✓ 已写</span></div>
+                <div class="ch-row"><span>第 2 章 旧信与刀</span><span class="ch-st done">✓ 已写</span></div>
+                <div class="ch-row"><span>第 3 章 长夜微光</span><span class="ch-st draft">草稿</span></div>
+                <div class="ch-row"><span>卷二 · 风起南巷</span><span class="ch-st draft">待生成</span></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="c-kicker">🏷 核心设定</div>
+              <div class="meta-tags">
+                <span class="mtag">沈寄 · 女主</span><span class="mtag">无名旧信</span><span class="mtag">江南小城</span><span class="mtag">抗战末年</span><span class="mtag">伏笔·火漆印</span>
+              </div>
+            </div>
+          </div>
+          <div class="pane-r" id="pane-book-reader">
+            <div class="reader" id="readerWrap">
+              <div class="reader-empty" id="readerEmpty">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 5h11l3 3v11H4z"/><path d="M8 12h8M8 16h6"/></svg>
+                <div>对话生成或确认写入后，<br/>正文会显示在这张方格稿纸上。</div>
+              </div>
+              <div id="readerFilled" style="display:none;height:100%;flex-direction:column;">
+                <div class="reader-head">
+                  <div class="r-vol">卷一 · 灯下启程</div>
+                  <div class="r-title">第 3 章 长夜微光</div>
+                </div>
+                <div class="reader-body" id="readerBody"></div>
+              </div>
+            </div>
+          </div>
+          <div class="pane-r" id="pane-book-doc">
+            <div class="doc-list" id="docList"></div>
+            <div class="doc-reader" id="docReader">
+              <div class="doc-reader-head">
+                <button class="doc-back" onclick="closeDoc()">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6l-6 6 6 6"/></svg>返回
+                </button>
+                <span class="doc-reader-title" id="docReaderTitle">.md</span>
+                <span class="type-badge jade" id="docReaderKind">设定</span>
+              </div>
+              <div class="doc-reader-body" id="docReaderBody"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 酒馆AI 详情页（完全独立，与书籍详情互不干扰） ===== -->
+      <section class="detail-page" id="page-tavern">
+        <header class="detail-head">
+          <span class="rh-title">酒馆AI</span>
+          <div class="seg">
+            <button class="active" data-seg="result" onclick="switchSeg('tavern','result')">成果</button>
+            <button data-seg="reader" onclick="switchSeg('tavern','reader')">阅读</button>
+            <button data-seg="doc" onclick="switchSeg('tavern','doc')">文档</button>
+          </div>
+          <button class="icon-btn collapse" onclick="toggleRight()" title="收起">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M9 6l6 6-6 6"/></svg>
+          </button>
+        </header>
+        <div class="detail-content">
+          <div class="pane-r active" id="pane-tv-result">
+            <!-- 由 renderTavernResult() 填充 -->
+          </div>
+          <div class="pane-r" id="pane-tv-reader">
+            <div class="reader" id="readerWrapTv">
+              <div class="reader-empty" id="readerEmptyTv">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 5h11l3 3v11H4z"/><path d="M8 12h8M8 16h6"/></svg>
+                <div>在酒馆闲聊中沉淀的灵感长文，<br/>会显示在这张方格稿纸上。</div>
+              </div>
+              <div id="readerFilledTv" style="display:none;height:100%;flex-direction:column;">
+                <div class="reader-head">
+                  <div class="r-vol">灵感长文</div>
+                  <div class="r-title">未命名</div>
+                </div>
+                <div class="reader-body" id="readerBodyTv"></div>
+              </div>
+            </div>
+          </div>
+          <div class="pane-r" id="pane-tv-doc">
+            <div class="doc-list" id="docListTv"></div>
+            <div class="doc-reader" id="docReaderTv">
+              <div class="doc-reader-head">
+                <button class="doc-back" onclick="closeDocTv()">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6l-6 6 6 6"/></svg>返回
+                </button>
+                <span class="doc-reader-title" id="docReaderTitleTv">.md</span>
+                <span class="type-badge jade" id="docReaderKindTv">灵感</span>
+              </div>
+              <div class="doc-reader-body" id="docReaderBodyTv"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- collapsed: icon rail (mirror left workbench) -->
+      <div class="right-rail">
+        <button class="rail-btn" title="酒馆AI" onclick="expandRight();openTavern()">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        </button>
+        <div class="rail-sep"></div>
+        <button class="rail-btn active" title="书架" onclick="expandRight();showBookWorkspace()">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 4h11l3 3v13H5z"/></svg>
+        </button>
+      </div>
+    </aside>
+  </div>
+</div>
+<div class="prototag">原型 v5.2 · 酒馆/书籍详情页拆为两个完全独立的 detail-page（各自表头+内容，互不嵌套）</div>
+<div class="toast" id="toast"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 13l4 4L19 7"/></svg><span id="toastMsg"></span></div>
+
+<script>
+  /* ---------- sample .md content for 创作工作台 ---------- */
+  var SAMPLES = {
+    world: {
+      name:'世界观.md', kindLabel:'世界观',
+      desc:'已基于《长夜行》已确认内容初拟世界观，可直接修改后写入（.md）。',
+      body:'# 世界观 · 长夜行\n\n## 时代背景\n抗战末年的江南，山河动荡却依旧有人间烟火。\n\n## 地理\n- **青溪**：故事主舞台，一座临水小城。\n- **旧巷**：沈寄居所，多雨、多信。\n\n## 核心设定\n- 信从不署名，却总在雨夜抵达。\n- 火漆印是一朵沈寄认得却想不起的花。\n\n> 「没有名字的人，往往留下的东西最多。」'
+    },
+    character: {
+      name:'人物设定_沈寄.md', kindLabel:'人物',
+      desc:'已生成女主沈寄设定卡，可补充细节后写入（.md）。',
+      body:'# 人物设定 · 沈寄\n\n- **身份**：青溪旧巷的独居女子，旧时曾是教书先生。\n- **年龄**：三十许。\n- **性格**：克制、安静，习惯把情绪收进抽屉。\n- **动机**：弄清一封封无名旧信的来处。\n\n## 人物弧光\n从回避过去，到主动回望。\n\n## 关系\n- 与「无名来信人」：未见的牵引。'
+    },
+    outline: {
+      name:'大纲_卷一.md', kindLabel:'大纲',
+      desc:'已生成卷一细纲，可调整章节顺序/取舍后写入（.md）。',
+      body:'# 大纲 · 卷一 灯下启程\n\n## 第 1 章 雨夜来客\n沈寄收到第一封无名信。\n\n## 第 2 章 旧信与刀\n信中提及一件旧物，牵出往事。\n\n## 第 3 章 长夜微光\n真相逼近，沈寄第一次选择不躲。\n\n> 卷一收束于「她把信折好，放进抽屉最深处」。'
+    },
+    chapter: {
+      name:'第4章_风起南巷.md', kindLabel:'章节草稿',
+      desc:'已生成第 4 章草稿，可直接润色后写入（.md），并落到右侧阅读。',
+      body:'# 第 4 章 风起南巷\n\n南巷的风比旧巷更急。沈寄站在巷口，手里捏着那封信，第一次没有把它收起来。\n\n「这一次，」她低声说，「我想知道你是谁。」\n\n风把信角吹起，火漆印在光里一闪——还是那朵花。'
+    }
+  };
+
+  /* 文档库（.md 为设定类事实源） */
+  var docsStore = [
+    { name:'世界观.md', kindLabel:'世界观', body:SAMPLES.world.body },
+    { name:'人物设定_沈寄.md', kindLabel:'人物', body:SAMPLES.character.body }
+  ];
+
+  /* 书架数据（点击书籍在右栏展开详情） */
+  var booksData = [
+    { title:'长夜行', status:'在写', meta:'32/120章', dot:'write',
+      logline:'一个在雨夜里反复收到无名旧信的女人，借由这些信，重新拼凑出自己不愿记起的过去。',
+      summary:'抗战末年的江南小城，沈寄收到第一封没有署名的信。信里写着的，是只有死去多年的人才知道的事。她被迫在长夜中回望，而每一封信，都让真相更近一步，也更危险一步。',
+      chapters:[['第 1 章 雨夜来客','done'],['第 2 章 旧信与刀','done'],['第 3 章 长夜微光','draft'],['卷二 · 风起南巷','draft']],
+      tags:['沈寄·女主','无名旧信','江南小城','抗战末年','伏笔·火漆印'] },
+    { title:'山海拾遗', status:'搭骨架', meta:'分卷中', dot:'skeleton',
+      logline:'散落民间的山海异闻，被一位落魄画师重新拼成画卷。',
+      summary:'画师陆离游走四方，把人们口中半真半假的异闻收进笔底；画卷每添一笔，便有一个消失的村庄被记得一次。',
+      chapters:[['卷一 · 启卷','draft'],['第 1 章 引魂笔','draft'],['第 2 章 无目鱼','draft']],
+      tags:['陆离·画师','山海异闻','画卷','守忆'] },
+    { title:'春山旧梦', status:'酝酿', meta:'一句话立意', dot:'brew',
+      logline:'一座总在春天失忆的古镇，与守梦人的漫长告别。',
+      summary:'（仅一句话立意，尚未展开。可在工作台选择「开一本新书」继续细化。）',
+      chapters:[],
+      tags:['春山','守梦人','失忆'] }
+  ];
+  var activeBook = booksData[0];
+
+  var defaultChatHTML = document.getElementById('chatLog').innerHTML;
+
+  /* ---------- layout toggles ---------- */
+  function toggleLeft(){ document.getElementById('left').classList.toggle('collapsed'); }
+  function expandLeft(){ document.getElementById('left').classList.remove('collapsed'); }
+  function toggleRight(){
+    var r=document.getElementById('right');
+    if(r.classList.contains('collapsed')){
+      r.classList.remove('collapsed');
+      if(r.classList.contains('tavern')){ openTavern(); }
+      else { showBookWorkspace(); }
+    } else {
+      r.classList.add('collapsed');
+    }
+  }
+  function expandRight(){
+    document.getElementById('right').classList.remove('collapsed');
+  }
+
+  /* ---------- 左栏：书架 ---------- */
+  function openBook(el){
+    document.querySelectorAll('.book-card').forEach(function(c){c.classList.remove('active');});
+    el.classList.add('active');
+    document.getElementById('navTavern').classList.remove('active');
+    var title=el.querySelector('.bc-title').textContent;
+    activeBook=booksData.find(function(b){return b.title===title;})||activeBook;
+    renderBookResult(activeBook);
+    showBookWorkspace();
+    toast('已打开《'+activeBook.title+'》');
+  }
+  function showBookWorkspace(){
+    var r=document.getElementById('right');
+    r.classList.remove('collapsed');
+    r.classList.add('book'); r.classList.remove('tavern');
+    document.getElementById('rhTitleBook').textContent='《'+activeBook.title+'》';
+    switchSeg('book','result');
+  }
+
+  /* ---------- 右栏：酒馆AI 详情（与书籍详情平行、互不干扰） ---------- */
+  var docsStoreTv = [
+    { name:'灵感碎片_长夜行.md', kindLabel:'灵感', body:'# 灵感碎片 · 长夜行\n\n## 第 3 章开头\n门廊的灯坏了半边，雨里有什么在等。\n\n## 沈寄身世\n旧时曾是教书先生，习惯把情绪收进抽屉。\n\n> 「不写她收到信，让信自己出现。」' }
+  ];
+  function openTavern(){
+    var r=document.getElementById('right');
+    r.classList.remove('collapsed');
+    r.classList.add('tavern'); r.classList.remove('book');
+    document.getElementById('navTavern').classList.add('active');
+    document.querySelectorAll('.book-card').forEach(function(c){c.classList.remove('active');});
+    renderTavernResult();
+    switchSeg('tavern','result');
+    toast('已进入酒馆AI');
+  }
+  function renderTavernResult(){
+    document.getElementById('pane-tv-result').innerHTML =
+      '<div class="card" style="display:flex;align-items:center;gap:10px;">'+
+        '<div style="flex:1;">'+
+          '<div class="c-title" style="margin:0 0 2px;">在酒馆里聊聊</div>'+
+          '<div class="c-body" style="font-size:12px;">和灵感酒保、书中人闲聊，把灵感聊透、沉淀下来</div>'+
+        '</div>'+
+        '<button class="btn-primary" onclick="seedTavernChat()">进入</button>'+
+      '</div>'+
+      '<div class="card"><div class="c-kicker">💡 今日灵感</div><div class="c-body">「门廊的灯坏了半边，雨里有什么在等」——比直接写「她收到一封信」更留白。</div></div>'+
+      '<div class="card"><div class="c-kicker">🗒 灵感碎片</div><div class="ch-list">'+
+        '<div class="ch-row"><span>第 3 章开头 · 留白处理</span><span class="ch-st done">已沉淀</span></div>'+
+        '<div class="ch-row"><span>沈寄身世 · 旧时教书先生</span><span class="ch-st done">已沉淀</span></div>'+
+        '<div class="ch-row"><span>火漆印 · 那朵认得的花</span><span class="ch-st draft">待扩写</span></div>'+
+      '</div></div>'+
+      '<div class="card"><div class="c-kicker">🏷 核心设定</div><div class="meta-tags">'+
+        '<span class="mtag">留白叙事</span><span class="mtag">沈寄·独居</span><span class="mtag">雨夜</span><span class="mtag">无名来信</span><span class="mtag">火漆印</span>'+
+      '</div></div>';
+  }
+  function seedTavernChat(){
+    var log=document.getElementById('chatLog');
+    log.innerHTML =
+      '<div class="msg ai"><div class="avatar ai">酒</div><div class="bubble">欢迎来酒馆。这里不赶进度，只想陪你把灵感聊透。今天想从哪儿开始——一个开头，还是某个卡住的角色？</div></div>';
+    document.getElementById('chSub').textContent='酒馆AI · 灵感闲聊';
+    toast('已进入酒馆闲聊');
+  }
+  function renderDocListTv(){
+    var el=document.getElementById('docListTv');
+    if(!docsStoreTv.length){
+      el.innerHTML='<div class="doc-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 5h11l3 3v11H4z"/><path d="M8 12h8M8 16h6"/></svg><div>在酒馆闲聊里沉淀的灵感，<br/>确认后会落在这里。</div></div>';
+      return;
+    }
+    var html='';
+    docsStoreTv.forEach(function(d){
+      var wc=d.body.replace(/\s/g,'').length;
+      html+='<div class="doc-card" onclick="openDocTv(\''+d.name+'\')">'+
+        '<div class="doc-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/></svg></div>'+
+        '<div class="doc-meta"><div class="doc-name">'+escapeHtml(d.name)+'</div><div class="doc-sub">'+d.kindLabel+' · '+wc+' 字</div></div>'+
+        '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>'+
+      '</div>';
+    });
+    el.innerHTML=html;
+  }
+  function openDocTv(name){
+    var d=docsStoreTv.find(function(x){return x.name===name;});
+    if(!d) return;
+    document.getElementById('docListTv').style.display='none';
+    var r=document.getElementById('docReaderTv'); r.classList.add('open');
+    document.getElementById('docReaderTitleTv').textContent=d.name;
+    document.getElementById('docReaderKindTv').textContent=d.kindLabel;
+    document.getElementById('docReaderBodyTv').innerHTML=mdToHtml(d.body);
+  }
+  function closeDocTv(){
+    document.getElementById('docListTv').style.display='';
+    document.getElementById('docReaderTv').classList.remove('open');
+  }
+  function fillReaderFromMdTv(body){
+    var lines=body.split('\n');
+    var title='灵感'; var start=0;
+    if(lines[0] && lines[0].indexOf('# ')===0){ title=lines[0].slice(2).trim(); start=1; }
+    while(start<lines.length && lines[start].trim()==='') start++;
+    var content=lines.slice(start).join('\n').trim();
+    document.getElementById('readerEmptyTv').style.display='none';
+    document.getElementById('readerFilledTv').style.display='flex';
+    document.querySelector('#readerFilledTv .r-title').textContent=title;
+    document.getElementById('readerBodyTv').textContent=content;
+  }
+
+  /* ---------- 中间：纯 AI 对话 ---------- */
+  function resetChat(){
+    var log=document.getElementById('chatLog');
+    log.innerHTML=defaultChatHTML;
+    document.getElementById('aiFollow').style.display='none';
+    document.getElementById('chSub').textContent='《长夜行》· 续写';
+    closePlus(); closeModal();
+    toast('已开启新对话');
+  }
+  function seedChat(type){
+    var log=document.getElementById('chatLog');
+    if(type==='continue'){ log.innerHTML=defaultChatHTML; return; }
+    var head='', body='';
+    if(type==='new'){ head='开一本新书'; body='太好了，我们从立意开始。先告诉我这本书想讲一个怎样的故事？或者我也可以先抛几个方向给你挑。'; }
+    else if(type==='workshop'){ head='进入拆书工坊'; body='把你想拆解的书或章节贴给我，我会帮你析出结构、节奏与可借鉴的技法。'; }
+    log.innerHTML =
+      '<div class="msg user"><div class="avatar me">我</div><div class="bubble">'+head+'</div></div>'+
+      '<div class="msg ai"><div class="avatar ai">N</div><div class="bubble">'+body+'</div></div>';
+  }
+  /* 「+」展开器里的能力 */
+  function quickAction(type){
+    closePlus();
+    if(type==='new'){ seedChat('new'); document.getElementById('chSub').textContent='新建作品 · AI 引导'; toast('开始开一本新书'); }
+    else if(type==='workshop'){ seedChat('workshop'); document.getElementById('chSub').textContent='拆书工坊'; toast('进入拆书工坊'); }
+    else if(type==='continue'){ seedChat('continue'); document.getElementById('chSub').textContent='《长夜行》· 续写'; toast('进入续写'); }
+  }
+  /* 右栏「继续创作 → 进入」调用 */
+  function startHub(type){
+    resetChat();
+    if(type==='continue'){ document.getElementById('chSub').textContent='《长夜行》· 续写'; }
+    toast('已进入创作工作台');
+  }
+
+  /* ---------- 「+」展开器 ---------- */
+  function togglePlus(e){ e.stopPropagation(); closeModal(); document.getElementById('plusPanel').classList.toggle('open'); }
+  function closePlus(){ document.getElementById('plusPanel').classList.remove('open'); }
+
+  /* ---------- 对话框内模态（接口设置 / 技能） ---------- */
+  function openModal(view){
+    closePlus();
+    document.getElementById('modalOverlay').classList.add('open');
+    document.getElementById('mpane-settings').classList.toggle('active', view==='settings');
+    document.getElementById('mpane-skills').classList.toggle('active', view==='skills');
+    document.getElementById('modalTitle').textContent = view==='settings'?'接口设置':'技能库';
+  }
+  function closeModal(){ document.getElementById('modalOverlay').classList.remove('open'); }
+
+  /* ---------- 右栏：书籍详情（成果/阅读/文档） ---------- */
+  function renderBookResult(b){
+    var ch = b.chapters.length ? b.chapters.map(function(c){
+      var st = c[1]==='done'?'✓ 已写':(c[1]==='draft'?'草稿':'待生成');
+      return '<div class="ch-row"><span>'+c[0]+'</span><span class="ch-st '+c[1]+'">'+st+'</span></div>';
+    }).join('') : '<div class="ch-row"><span>暂无章节</span></div>';
+    var tags = b.tags.map(function(t){return '<span class="mtag">'+t+'</span>';}).join('');
+    document.getElementById('pane-book-result').innerHTML =
+      '<div class="card" style="display:flex;align-items:center;gap:10px;">'+
+        '<div style="flex:1">'+
+          '<div class="c-title" style="margin:0 0 2px;">继续创作《'+b.title+'》</div>'+
+          '<div class="c-body" style="font-size:12px;">在中间工作台与 AI 接着写</div>'+
+        '</div>'+
+        '<button class="btn-primary" onclick="startHub(\'continue\')">进入</button>'+
+      '</div>'+
+      '<div class="card"><div class="c-kicker">📌 一句话立意</div><div class="c-title">'+b.title+'</div><div class="c-body">'+b.logline+'</div></div>'+
+      '<div class="card"><div class="c-kicker">📖 梗概</div><div class="c-body">'+b.summary+'</div></div>'+
+      '<div class="card"><div class="c-kicker">🗂 章节列表</div><div class="ch-list">'+ch+'</div></div>'+
+      '<div class="card"><div class="c-kicker">🏷 核心设定</div><div class="meta-tags">'+tags+'</div></div>';
+  }
+
+  function switchSeg(page, seg){
+    var pfx = (page==='tavern') ? 'tv' : 'book';
+    var pageEl = document.getElementById('page-'+page);
+    pageEl.querySelectorAll('.seg button').forEach(function(b){ b.classList.toggle('active', b.dataset.seg===seg); });
+    pageEl.querySelectorAll('.pane-r').forEach(function(p){ p.classList.toggle('active', p.id==='pane-'+pfx+'-'+seg); });
+    if(seg==='doc'){ if(page==='tavern') renderDocListTv(); else renderDocList(); }
+    else { if(page==='tavern') closeDocTv(); else closeDoc(); }
+  }
+
+  /* ---------- 创作工作台：生成可编辑 .md 提案 ---------- */
+  function genFromType(type){
+    var s=SAMPLES[type];
+    var log=document.getElementById('chatLog');
+    var u=document.createElement('div'); u.className='msg user';
+    u.innerHTML='<div class="avatar me">我</div><div class="bubble"></div>';
+    u.querySelector('.bubble').textContent='帮我生成《长夜行》的【'+s.kindLabel+'】.md';
+    log.appendChild(u);
+    var a=document.createElement('div'); a.className='msg ai';
+    a.innerHTML='<div class="avatar ai">N</div><div class="bubble"></div>';
+    a.querySelector('.bubble').textContent='正在基于现有大纲与已确认内容构建'+s.kindLabel+'，稍候给你一份可直接修改的草稿。';
+    log.appendChild(a);
+    var tr=document.createElement('div'); tr.className='tool-row';
+    tr.innerHTML='<span class="chip-act"><span class="spin"></span>'+s.kindLabel+'生成中…</span>';
+    log.appendChild(tr);
+    var box=log.parentElement;
+    box.scrollTop=box.scrollHeight;
+    setTimeout(function(){
+      tr.innerHTML='<span class="chip-act done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 13l4 4L19 7"/></svg>已生成'+s.kindLabel+'草稿</span>';
+      var card=document.createElement('div'); card.className='hitl'; card.dataset.kind=type; card.dataset.body=s.body;
+      card.innerHTML=
+        '<div class="hitl-head"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/></svg>'+
+        '<span class="hitl-label">待确认写入</span><span class="file-name">'+s.name+'</span>'+
+        '<span class="type-badge gold" style="margin-left:auto">'+s.kindLabel+'</span></div>'+
+        '<div class="hitl-desc">'+s.desc+'</div>'+
+        '<textarea class="md-editor" spellcheck="false">'+escapeHtml(s.body)+'</textarea>'+
+        '<div class="hitl-actions">'+
+          '<button class="btn-ghost" onclick="regen(this)">重新生成</button>'+
+          '<button class="btn-ghost" onclick="cancelProp(this)">取消</button>'+
+          '<button class="btn-primary" onclick="confirmProp(this)">确认写入</button>'+
+        '</div>';
+      log.appendChild(card);
+      box.scrollTop=box.scrollHeight;
+    },950);
+  }
+
+  function escapeHtml(s){
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function confirmProp(btn){
+    var card=btn.closest('.hitl');
+    var kind=card.dataset.kind;
+    var name=card.querySelector('.file-name').textContent;
+    var body=card.querySelector('.md-editor').value;
+    var kindLabel=card.querySelector('.type-badge').textContent;
+    var existing=docsStore.find(function(d){return d.name===name;});
+    if(existing){ existing.body=body; } else { docsStore.push({name:name, kindLabel:kindLabel, body:body}); }
+    renderDocList();
+    card.querySelector('.md-editor').setAttribute('readonly','readonly');
+    card.querySelector('.md-editor').style.background='var(--surface-2)';
+    var badge=card.querySelector('.type-badge'); badge.className='type-badge jade'; badge.textContent='已写入';
+    card.querySelector('.hitl-label').textContent='已写入项目';
+    card.querySelector('.hitl-actions').innerHTML='<span class="written-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 13l4 4L19 7"/></svg> 已保存到 '+name+'</span>';
+    document.getElementById('aiFollow').style.display='flex';
+    if(kind==='chapter'){
+      showBookWorkspace();
+      switchSeg('book','reader');
+      fillReaderFromMd(body);
+      toast('已写入 '+name+'，右侧阅读已更新');
+    } else {
+      showBookWorkspace();
+      switchSeg('book','doc');
+      openDoc(name);
+      toast('已写入 '+name+'，可在右侧「文档」查看');
+    }
+  }
+  function cancelProp(btn){ var card=btn.closest('.hitl'); card.style.display='none'; toast('已取消本次写入'); }
+  function regen(btn){ var card=btn.closest('.hitl'); if(card.dataset.body){ card.querySelector('.md-editor').value=card.dataset.body; } toast('已重新生成草稿（可继续改）'); }
+
+  /* ---------- 右栏：文档视图 (.md) ---------- */
+  function renderDocList(){
+    var el=document.getElementById('docList');
+    if(!docsStore.length){
+      el.innerHTML='<div class="doc-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 5h11l3 3v11H4z"/><path d="M8 12h8M8 16h6"/></svg><div>在对话中让 AI 生成世界观 / 人物设定等，<br/>确认后会落在这里。</div></div>';
+      return;
+    }
+    var html='';
+    docsStore.forEach(function(d){
+      var wc=d.body.replace(/\s/g,'').length;
+      html+='<div class="doc-card" onclick="openDoc(\''+d.name+'\')">'+
+        '<div class="doc-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/></svg></div>'+
+        '<div class="doc-meta"><div class="doc-name">'+escapeHtml(d.name)+'</div><div class="doc-sub">'+d.kindLabel+' · '+wc+' 字</div></div>'+
+        '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>'+
+      '</div>';
+    });
+    el.innerHTML=html;
+  }
+  function openDoc(name){
+    var d=docsStore.find(function(x){return x.name===name;});
+    if(!d) return;
+    document.getElementById('docList').style.display='none';
+    var r=document.getElementById('docReader'); r.classList.add('open');
+    document.getElementById('docReaderTitle').textContent=d.name;
+    document.getElementById('docReaderKind').textContent=d.kindLabel;
+    document.getElementById('docReaderBody').innerHTML=mdToHtml(d.body);
+  }
+  function closeDoc(){
+    document.getElementById('docList').style.display='';
+    document.getElementById('docReader').classList.remove('open');
+  }
+
+  function mdToHtml(md){
+    function inline(s){
+      s=s.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
+      s=s.replace(/\*(.+?)\*/g,'<em>$1</em>');
+      s=s.replace(/`(.+?)`/g,'<code>$1</code>');
+      return s;
+    }
+    var esc=function(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
+    var lines=md.split('\n');
+    var html=''; var inUl=false;
+    function closeUl(){ if(inUl){ html+='</ul>'; inUl=false; } }
+    for(var i=0;i<lines.length;i++){
+      var ln=lines[i].trim();
+      if(ln===''){ closeUl(); continue; }
+      var m;
+      if(m=ln.match(/^###\s+(.*)$/)){ closeUl(); html+='<h3>'+inline(esc(m[1]))+'</h3>'; }
+      else if(m=ln.match(/^##\s+(.*)$/)){ closeUl(); html+='<h2>'+inline(esc(m[1]))+'</h2>'; }
+      else if(m=ln.match(/^#\s+(.*)$/)){ closeUl(); html+='<h1>'+inline(esc(m[1]))+'</h1>'; }
+      else if(m=ln.match(/^>\s?(.*)$/)){ closeUl(); html+='<blockquote>'+inline(esc(m[1]))+'</blockquote>'; }
+      else if(m=ln.match(/^[-*]\s+(.*)$/)){ if(!inUl){ html+='<ul>'; inUl=true; } html+='<li>'+inline(esc(m[1]))+'</li>'; }
+      else { closeUl(); html+='<p>'+inline(esc(ln))+'</p>'; }
+    }
+    closeUl();
+    return html;
+  }
+
+  /* ---------- 右栏：方格稿纸阅读（章节落稿） ---------- */
+  function fillReaderFromMd(body){
+    var lines=body.split('\n');
+    var title='章节'; var start=0;
+    if(lines[0] && lines[0].indexOf('# ')===0){ title=lines[0].slice(2).trim(); start=1; }
+    while(start<lines.length && lines[start].trim()==='') start++;
+    var content=lines.slice(start).join('\n').trim();
+    document.getElementById('readerEmpty').style.display='none';
+    document.getElementById('readerFilled').style.display='flex';
+    document.querySelector('#readerFilled .r-title').textContent=title;
+    document.getElementById('readerBody').textContent=content;
+  }
+
+  /* ---------- composer（创作对话） ---------- */
+  function sendMsg(){
+    var ta=document.getElementById('composerInput');
+    var txt=ta.value.trim(); if(!txt) return;
+    var log=document.getElementById('chatLog');
+    var m=document.createElement('div'); m.className='msg user';
+    m.innerHTML='<div class="avatar me">我</div><div class="bubble"></div>';
+    m.querySelector('.bubble').textContent=txt;
+    log.appendChild(m);
+    ta.value='';
+    var box=log.parentElement; box.scrollTop=box.scrollHeight;
+    setTimeout(function(){
+      var a=document.createElement('div'); a.className='msg ai';
+      a.innerHTML='<div class="avatar ai">N</div><div class="bubble">收到。我会基于《长夜行》现有大纲与人物设定来处理这个方向，生成后照例先经你确认再写入右侧展示空间。</div>';
+      log.appendChild(a);
+      box.scrollTop=box.scrollHeight;
+    },650);
+  }
+
+  /* ---------- skill popover ---------- */
+  function toggleSkill(e){
+    e.stopPropagation();
+    closePlus(); closeModal();
+    document.getElementById('skillPop').classList.toggle('open');
+  }
+  document.addEventListener('click', function(){ document.getElementById('skillPop').classList.remove('open'); document.getElementById('plusPanel').classList.remove('open'); });
+
+  /* ---------- toast ---------- */
+  var toastTimer;
+  function toast(msg){
+    var t=document.getElementById('toast');
+    document.getElementById('toastMsg').textContent=msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer=setTimeout(function(){t.classList.remove('show');},2200);
+  }
+
+  /* init */
+  renderDocList();
+</script>
+</body>
+</html>

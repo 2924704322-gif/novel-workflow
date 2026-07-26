@@ -1,0 +1,29 @@
+sequenceDiagram
+    actor U as 用户
+    participant CS as ChatStudio/RoleplayChat
+    participant UR as useRoleplay
+    participant API as /api/agent/roleplay
+    participant RT as RoleplayRuntime
+    participant TS as TavernStore
+    participant LE as LorebookEngine
+    participant LLM as streamChat
+
+    U->>CS: 选群组/角色 → 发送消息
+    CS->>UR: send(text, {groupId?, lorebookIds?})
+    UR->>API: POST(RoleplayRequest+groupId)
+    API->>RT: runGroupTurn(req)
+    RT->>TS: loadGroup(groupId) + loadMembers(members)
+    TS-->>RT: RoleplayGroup + CharacterCardV2[]
+    RT->>RT: 按 activationStrategy 选发言者(speaker)
+    RT->>TS: loadLorebooks(projectId + speaker.card)
+    TS-->>RT: Lorebook[] (项目级+角色级)
+    RT->>LE: scanLorebook(entries, recentMessages, {scanDepth,tokenBudget})
+    LE-->>RT: ScannedEntry[]（排序+预算内）
+    RT->>RT: assembleRoleContext(card, scannedLore, group, generationMode)
+    RT->>LLM: streamChat(systemPrompt+history)
+    LLM-->>RT: token stream
+    RT-->>API: RoleplayStreamEvent{type:"text",delta}
+    API-->>UR: NDJSON 流
+    UR-->>CS: 流式气泡
+    RT->>RT: 落库 RoleplaySession（含 nextSpeaker）
+    RT-->>API: {type:"done", nextSpeaker}
