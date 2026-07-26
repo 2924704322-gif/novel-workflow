@@ -1,6 +1,13 @@
 # dependencies
 /node_modules
 
+# vitest 本地缓存目录
+/.vitest-cache
+
+# 脚手架期间使用的 npm 缓存目录（非仓库内容）
+/.npmcache
+/.npmcache2
+
 # next.js build output
 /.next
 /out
@@ -18,6 +25,10 @@
 *.log
 .DS_Store
 Thumbs.db
+
+# agent 辅助工具的本地工作目录（非仓库内容）
+/.verify
+/.workbuddy
 
 # local env files
 .env*.local

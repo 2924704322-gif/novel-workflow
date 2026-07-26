@@ -11,12 +11,35 @@
 // user can relocate it to any disk via the "数据 → 更改数据存储位置…" menu; we
 // then persist only a tiny pointer file in userData.
 
-const { app, BrowserWindow, shell, dialog, Menu, ipcMain } = require("electron");
+const { app, BrowserWindow, shell, dialog, Menu, ipcMain, protocol } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const http = require("http");
 const net = require("net");
 const { fork } = require("child_process");
+
+// 离线字体协议（FT-13 / Q2）：将 app://fonts/* 映射到打包资源目录，
+// 供 @font-face { src: url("app://fonts/NotoSerifSC.woff2") } 在离线环境加载本地字体。
+// 必须在 app ready 之前注册特权方案。
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "app",
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      bypassCSP: true,
+    },
+  },
+]);
+
+// 字体目录：生产环境取 resources/fonts（electron-builder extraResources 落点）；
+// 开发（electron:dev 直连 localhost:3000）回退到仓库内 electron/fonts。
+function fontsDir() {
+  const prod = path.join(process.resourcesPath || "", "fonts");
+  if (process.resourcesPath && fs.existsSync(prod)) return prod;
+  return path.join(app.getAppPath(), "electron", "fonts");
+}
 
 const isDev = !app.isPackaged;
 const DEV_URL = "http://localhost:3000";
@@ -231,8 +254,8 @@ async function createWindow() {
     height: 860,
     minWidth: 960,
     minHeight: 640,
-    title: "墨章 Novel Atelier",
-    backgroundColor: "#faf6f0",
+    title: "Novel&Chat",
+    backgroundColor: "#f6f7f9",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -319,6 +342,17 @@ if (!gotLock) {
   });
 
   app.whenReady().then(() => {
+    // 注册 app:// 文件协议（映射字体等本地资源，FT-13 / Q2）。
+    protocol.registerFileProtocol("app", (request, callback) => {
+      try {
+        const urlPath = request.url.replace(/^app:\/\//, "");
+        const decoded = decodeURIComponent(urlPath.split("?")[0]);
+        callback({ path: path.join(fontsDir(), decoded) });
+      } catch {
+        callback({ error: -2 /* FILE_NOT_FOUND */ });
+      }
+    });
+
     currentDataRoot = resolveDataRoot();
     buildMenu();
     registerIpcHandlers();

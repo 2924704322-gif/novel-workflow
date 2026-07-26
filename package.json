@@ -10,7 +10,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
+    "test": "vitest run --no-cache",
+    "test:watch": "vitest --no-cache",
     "electron:dev": "concurrently -k \"next dev\" \"cross-env NODE_ENV=development wait-on http://localhost:3000 && electron electron/main.js\"",
     "prepare:standalone": "node scripts/prepare-standalone.mjs",
     "app:build": "next build && npm run prepare:standalone && electron-builder",
@@ -20,9 +22,12 @@
     "epub-gen-memory": "^1.1.2",
     "next": "^15.5.4",
     "react": "19.0.0",
-    "react-dom": "19.0.0"
+    "react-dom": "19.0.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4.0.0",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -31,18 +36,27 @@
     "cross-env": "^7.0.3",
     "electron": "^33.2.0",
     "electron-builder": "^25.1.8",
+    "eslint": "^9",
+    "eslint-config-next": "^15",
     "tailwindcss": "^4.0.0",
     "typescript": "^5",
+    "vitest": "^2",
     "wait-on": "^8.0.1"
   },
   "build": {
     "appId": "com.novelatelier.app",
-    "productName": "墨章 Novel Atelier",
+    "productName": "Novel&Chat",
     "asar": false,
     "directories": {
       "output": "dist",
       "buildResources": "build"
     },
+    "extraResources": [
+      {
+        "from": "electron/fonts",
+        "to": "fonts"
+      }
+    ],
     "files": [
       "electron/**",
       ".next/standalone/**"

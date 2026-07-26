@@ -1,0 +1,8 @@
+# 离线字体资源目录（FT-13 / Q2）
+#
+# 将 Noto Serif SC 的 woff2 放到本目录，命名为：
+#   NotoSerifSC.woff2
+# electron-builder 的 extraResources 会把它复制到打包后的 resources/fonts/，
+# electron/main.js 注册的 app:// 协议即可在离线环境加载本地字体：
+#   @font-face { src: url("app://fonts/NotoSerifSC.woff2") }
+# 缺字体时 @font-face 用 font-display:swap 退回系统衬线，不致命。
