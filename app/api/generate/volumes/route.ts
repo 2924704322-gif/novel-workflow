@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { streamChat, validateConfig } from "@/lib/llm";
 import { buildVolumesPrompt } from "@/lib/prompts";
+import { LLM_MAX_TOKENS } from "@/lib/constants";
 import type { ApiConfig, ProjectSetup, StoryBible } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest) {
       config,
       buildVolumesPrompt(setup, bible, direction),
       {
-        maxTokens: 8192,
+        maxTokens: LLM_MAX_TOKENS,
       }
     );
     return new Response(stream, {

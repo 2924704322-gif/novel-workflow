@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { streamChat, validateConfig } from "@/lib/llm";
 import { buildBiblePrompt } from "@/lib/prompts";
+import { LLM_MAX_TOKENS } from "@/lib/constants";
 import type { ApiConfig, ProjectSetup } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +24,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const stream = await streamChat(config, buildBiblePrompt(setup, direction), {
-      maxTokens: 8192,
+      maxTokens: LLM_MAX_TOKENS,
     });
     return new Response(stream, {
       headers: {

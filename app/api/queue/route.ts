@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveAuth } from "@/lib/auth";
 import { getEffectiveConfig } from "@/lib/config-provider";
-import { enqueueTask, listTasks, deleteTask } from "@/lib/queue/store";
+import { enqueueTask, listTasks, deleteTask, getTask } from "@/lib/queue/store";
 import { startTask, pauseTask } from "@/lib/queue/runner";
 import type { TaskDefinition } from "@/lib/queue/types";
 
@@ -36,7 +36,12 @@ export async function POST(req: NextRequest) {
       if (!taskId) {
         return NextResponse.json({ error: "缺少 taskId" }, { status: 400 });
       }
-      const config = getEffectiveConfig(body.config);
+      const task = await getTask(taskId);
+      if (!task) {
+        return NextResponse.json({ error: "任务不存在" }, { status: 404 });
+      }
+      // 优先采用入队时固化的配置；未固化时退回调用方携带的 body.config。
+      const config = getEffectiveConfig(task.config || body.config);
       // 后台启动（不阻塞请求）
       const controller = new AbortController();
       startTask(taskId, { config, signal: controller.signal }).catch(() => {});

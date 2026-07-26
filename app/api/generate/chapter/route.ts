@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { streamChat, validateConfig } from "@/lib/llm";
 import { buildChapterPrompt } from "@/lib/prompts";
+import { LLM_MAX_TOKENS } from "@/lib/constants";
 import type { ChapterContext } from "@/lib/retrieval";
 import type {
   ApiConfig,
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
         prompts,
         nextChapter
       ),
-      { maxTokens: 8192 }
+      { maxTokens: LLM_MAX_TOKENS }
     );
     return new Response(stream, {
       headers: {
