@@ -1,15 +1,28 @@
 "use client";
 
+// 版本历史（FT-11 救火：统一清爽风，Q1）
+// 仅用清爽风主层令牌（app/globals.css），清除 Tailwind 暗色类与暖阁硬编码暖色。
+// 保持原有功能逻辑（快照列表 / diff 对比 / 回滚），只替换视觉层与令牌引用。
+
 import { useState, useEffect, useCallback } from "react";
 import type { SnapshotMeta, DiffResult, DiffLine } from "@/lib/history/types";
+import { X, Clock } from "@/components/studio/icons";
+import EmptyState from "@/components/studio/EmptyState";
 
 interface HistoryPanelProps {
   projectId: string;
   chapterId: string;
   onRestore?: () => void; // 回滚成功后的回调（刷新章节内容）
+  /** FT-11：挂载为模态时提供关闭按钮。 */
+  onClose?: () => void;
 }
 
-export default function HistoryPanel({ projectId, chapterId, onRestore }: HistoryPanelProps) {
+export default function HistoryPanel({
+  projectId,
+  chapterId,
+  onRestore,
+  onClose,
+}: HistoryPanelProps) {
   const [snapshots, setSnapshots] = useState<SnapshotMeta[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -75,7 +88,10 @@ export default function HistoryPanel({ projectId, chapterId, onRestore }: Histor
 
   const formatTime = (ts: number) => {
     const d = new Date(ts);
-    return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
+    return `${d.getMonth() + 1}/${d.getDate()} ${d
+      .getHours()
+      .toString()
+      .padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
   };
 
   const sourceLabel: Record<string, string> = {
@@ -85,35 +101,48 @@ export default function HistoryPanel({ projectId, chapterId, onRestore }: Histor
   };
 
   return (
-    <div className="flex flex-col h-full text-sm">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-700">
-        <h3 className="font-medium text-neutral-200">版本历史</h3>
-        <span className="text-xs text-neutral-500">{snapshots.length} 个快照</span>
+    <div className="tray-root">
+      <div className="tray-head">
+        <div>
+          <span className="tray-title">版本历史</span>
+          <span className="tray-sub">{snapshots.length} 个快照</span>
+        </div>
+        {onClose && (
+          <button
+            type="button"
+            className="modal-x"
+            onClick={onClose}
+            aria-label="关闭"
+          >
+            <X size={16} />
+          </button>
+        )}
       </div>
 
       {loading ? (
-        <div className="p-4 text-center text-neutral-500">加载中...</div>
+        <div className="tray-empty">加载中...</div>
       ) : snapshots.length === 0 ? (
-        <div className="p-4 text-center text-neutral-500">暂无历史快照</div>
+        <EmptyState
+          icon={<Clock size={20} />}
+          title="暂无历史快照"
+          hint="本章每次落稿会自动拍快照，回滚到此前的版本。"
+        />
       ) : (
-        <div className="flex-1 overflow-hidden flex flex-col">
+        <div className="tray-body history-split">
           {/* 快照列表 */}
-          <div className="flex-shrink-0 max-h-48 overflow-y-auto border-b border-neutral-700">
+          <div className="snap-list">
             {snapshots.map((s) => (
               <button
                 key={s.id}
+                type="button"
                 onClick={() => handleSelect(s.id)}
-                className={`w-full text-left px-3 py-2 hover:bg-neutral-700/50 transition-colors ${
-                  selectedId === s.id ? "bg-neutral-700" : ""
-                }`}
+                className={"snap-item" + (selectedId === s.id ? " on" : "")}
               >
-                <div className="flex items-center justify-between">
-                  <span className="text-neutral-300">{formatTime(s.createdAt)}</span>
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-neutral-600 text-neutral-300">
-                    {sourceLabel[s.source] || s.source}
-                  </span>
+                <div className="snap-row-top">
+                  <span className="snap-time">{formatTime(s.createdAt)}</span>
+                  <span className="tag">{sourceLabel[s.source] || s.source}</span>
                 </div>
-                <div className="text-xs text-neutral-500 mt-0.5">
+                <div className="task-meta">
                   {s.wordCount} 字 · {s.status}
                 </div>
               </button>
@@ -122,45 +151,50 @@ export default function HistoryPanel({ projectId, chapterId, onRestore }: Histor
 
           {/* Diff 视图 */}
           {selectedId && (
-            <div className="flex-1 overflow-y-auto">
+            <div className="snap-diff">
               {diffLoading ? (
-                <div className="p-4 text-center text-neutral-500">加载差异...</div>
+                <div className="tray-empty">加载差异...</div>
               ) : diff ? (
-                <div className="p-2">
-                  <div className="flex items-center justify-between mb-2 px-1">
-                    <span className="text-xs text-neutral-400">
-                      <span className="text-green-400">+{diff.addedCount}</span>{" "}
-                      <span className="text-red-400">-{diff.deletedCount}</span>{" "}
-                      <span className="text-neutral-500">={diff.unchangedCount}</span>
+                <div>
+                  <div className="diff-head">
+                    <span className="diff-counts">
+                      <span className="st-jade">+{diff.addedCount}</span>{" "}
+                      <span className="st-danger">-{diff.deletedCount}</span>{" "}
+                      <span className="st-faint">={diff.unchangedCount}</span>
                     </span>
                     <button
+                      type="button"
+                      className="btn-primary btn-sm"
                       onClick={handleRestore}
                       disabled={restoring}
-                      className="px-2 py-1 text-xs rounded bg-amber-700 hover:bg-amber-600 text-white disabled:opacity-50"
                     >
                       {restoring ? "回滚中..." : "回滚到此版本"}
                     </button>
                   </div>
-                  <div className="font-mono text-xs leading-5 bg-neutral-900 rounded p-2 max-h-64 overflow-y-auto">
+                  <div className="diff">
                     {diff.lines.slice(0, 200).map((line: DiffLine, i: number) => (
                       <div
                         key={i}
-                        className={`${
+                        className={
                           line.type === "add"
-                            ? "bg-green-900/30 text-green-300"
+                            ? "diff-add"
                             : line.type === "delete"
-                            ? "bg-red-900/30 text-red-300"
-                            : "text-neutral-500"
-                        }`}
+                              ? "diff-del"
+                              : "diff-eq"
+                        }
                       >
-                        <span className="inline-block w-4 text-right mr-1 opacity-50">
-                          {line.type === "add" ? "+" : line.type === "delete" ? "-" : " "}
+                        <span className="diff-mark">
+                          {line.type === "add"
+                            ? "+"
+                            : line.type === "delete"
+                              ? "-"
+                              : " "}
                         </span>
                         {line.content || " "}
                       </div>
                     ))}
                     {diff.lines.length > 200 && (
-                      <div className="text-neutral-500 mt-1">
+                      <div className="diff-eq">
                         ... 还有 {diff.lines.length - 200} 行
                       </div>
                     )}

@@ -1,10 +1,13 @@
 "use client";
 
+// DEPRECATED: 被 components/studio/LeftNav 取代（FT-04）。保留文件仅供历史参考，
+// 请勿在新代码中 import。新左栏见 components/studio/LeftNav.tsx。
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { fetchProjects, formatWords } from "@/lib/client";
 import type { ProjectSummary } from "@/lib/types";
+import TaskQueue from "@/components/TaskQueue";
 
 /**
  * 左侧资源栏（IDE 式）：上半为全局导航，下半为「书库」列表。
@@ -114,6 +117,19 @@ export default function LeftRail({ onCollapse }: { onCollapse: () => void }) {
           })
         )}
       </nav>
+
+      {/* 任务队列面板：固定在侧栏底部，便于发起/监控批量任务。 */}
+      <div
+        className="rail-queue"
+        style={{
+          flex: "0 0 340px",
+          minHeight: 0,
+          borderTop: "1px solid var(--line)",
+          overflow: "hidden",
+        }}
+      >
+        <TaskQueue />
+      </div>
     </div>
   );
 }

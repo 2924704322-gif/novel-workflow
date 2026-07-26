@@ -1,5 +1,9 @@
 "use client";
 
+// DEPRECATED（v5.2 新主界面重构）：旧三步走「正文」步骤组件，已无活跃路由引用。
+// 新入口为 components/studio/* 的对话式创作（ChatStudio + HitlMdCard 落稿闭环）。
+// 保留原因：旧工程参考 + 可能的回退需要；请勿在新代码中引用本组件。
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   loadConfig,

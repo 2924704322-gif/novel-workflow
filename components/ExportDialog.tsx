@@ -1,7 +1,13 @@
 "use client";
 
+// 导出作品（FT-11 救火：统一清爽风，Q1）
+// 仅用清爽风主层令牌（app/globals.css），清除 Tailwind 暗色类与暖阁硬编码暖色。
+// 保持原有功能逻辑（格式/范围/选项 + Electron/Web 双通道下载），只替换视觉层与令牌引用。
+
 import { useState } from "react";
 import type { ExportFormat } from "@/lib/export/types";
+import { X, Download } from "@/components/studio/icons";
+import ErrorNote from "@/components/studio/ErrorNote";
 
 interface ExportDialogProps {
   projectId: string;
@@ -24,11 +30,13 @@ export default function ExportDialog({
   const [includeOutline, setIncludeOutline] = useState(false);
   const [includeNotes, setIncludeNotes] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   if (!open) return null;
 
   const handleExport = async () => {
     setLoading(true);
+    setErr(null);
     try {
       const params = new URLSearchParams({
         projectId,
@@ -62,8 +70,8 @@ export default function ExportDialog({
         document.body.removeChild(a);
       }
       onClose();
-    } catch (err) {
-      alert(`导出失败：${(err as Error).message}`);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "导出失败");
     } finally {
       setLoading(false);
     }
@@ -76,106 +84,121 @@ export default function ExportDialog({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="bg-neutral-800 rounded-lg shadow-xl w-full max-w-md p-5">
-        <h2 className="text-lg font-semibold text-neutral-100 mb-4">导出作品</h2>
-
-        {/* 格式选择 */}
-        <div className="mb-4">
-          <label className="block text-sm text-neutral-400 mb-2">导出格式</label>
-          <div className="grid grid-cols-3 gap-2">
-            {formats.map((f) => (
-              <button
-                key={f.value}
-                onClick={() => setFormat(f.value)}
-                className={`p-2 rounded border text-center text-sm transition-colors ${
-                  format === f.value
-                    ? "border-amber-500 bg-amber-900/30 text-amber-200"
-                    : "border-neutral-600 hover:border-neutral-500 text-neutral-300"
-                }`}
-              >
-                <div className="font-medium">{f.label}</div>
-                <div className="text-xs text-neutral-500 mt-0.5">{f.desc}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* 范围 */}
-        <div className="mb-4">
-          <label className="block text-sm text-neutral-400 mb-2">导出范围</label>
-          <div className="flex gap-3">
-            <label className="flex items-center gap-1.5 text-sm text-neutral-300">
-              <input
-                type="radio"
-                checked={scope === "full"}
-                onChange={() => setScope("full")}
-                className="accent-amber-500"
-              />
-              全书
-            </label>
-            <label className="flex items-center gap-1.5 text-sm text-neutral-300">
-              <input
-                type="radio"
-                checked={scope === "volume"}
-                onChange={() => setScope("volume")}
-                className="accent-amber-500"
-              />
-              单卷
-            </label>
-            {scope === "volume" && (
-              <select
-                value={volumeIndex}
-                onChange={(e) => setVolumeIndex(Number(e.target.value))}
-                className="ml-2 px-2 py-1 rounded bg-neutral-700 border border-neutral-600 text-sm text-neutral-200"
-              >
-                {Array.from({ length: volumeCount }, (_, i) => (
-                  <option key={i} value={i}>
-                    第{i + 1}卷
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-        </div>
-
-        {/* 选项 */}
-        <div className="mb-5 space-y-2">
-          <label className="flex items-center gap-2 text-sm text-neutral-300">
-            <input
-              type="checkbox"
-              checked={includeOutline}
-              onChange={(e) => setIncludeOutline(e.target.checked)}
-              className="accent-amber-500"
-            />
-            包含故事设定
-          </label>
-          <label className="flex items-center gap-2 text-sm text-neutral-300">
-            <input
-              type="checkbox"
-              checked={includeNotes}
-              onChange={(e) => setIncludeNotes(e.target.checked)}
-              className="accent-amber-500"
-            />
-            包含章节概要
-          </label>
-        </div>
-
-        {/* 操作 */}
-        <div className="flex justify-end gap-3">
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-panel" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <span className="tray-title">导出作品</span>
           <button
+            type="button"
+            className="modal-x"
             onClick={onClose}
-            className="px-4 py-2 text-sm rounded border border-neutral-600 text-neutral-300 hover:bg-neutral-700"
+            aria-label="关闭"
           >
-            取消
+            <X size={16} />
           </button>
-          <button
-            onClick={handleExport}
-            disabled={loading}
-            className="px-4 py-2 text-sm rounded bg-amber-600 hover:bg-amber-500 text-white font-medium disabled:opacity-50"
-          >
-            {loading ? "导出中..." : "导出"}
-          </button>
+        </div>
+        <div className="modal-body">
+          {/* 格式选择 */}
+          <div className="field" style={{ marginBottom: 16 }}>
+            <label className="label">导出格式</label>
+            <div className="choice-grid">
+              {formats.map((f) => (
+                <button
+                  key={f.value}
+                  type="button"
+                  className={"choice" + (format === f.value ? " on" : "")}
+                  onClick={() => setFormat(f.value)}
+                >
+                  <div style={{ fontWeight: 600 }}>{f.label}</div>
+                  <div className="tray-sub" style={{ marginTop: 4 }}>
+                    {f.desc}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 范围 */}
+          <div className="field" style={{ marginBottom: 16 }}>
+            <label className="label">导出范围</label>
+            <div className="export-scope">
+              <label className="radio-line">
+                <input
+                  type="radio"
+                  checked={scope === "full"}
+                  onChange={() => setScope("full")}
+                  style={{ accentColor: "var(--accent)" }}
+                />
+                全书
+              </label>
+              <label className="radio-line">
+                <input
+                  type="radio"
+                  checked={scope === "volume"}
+                  onChange={() => setScope("volume")}
+                  style={{ accentColor: "var(--accent)" }}
+                />
+                单卷
+              </label>
+              {scope === "volume" && (
+                <select
+                  className="control"
+                  style={{ width: "auto", marginLeft: 8 }}
+                  value={volumeIndex}
+                  onChange={(e) => setVolumeIndex(Number(e.target.value))}
+                >
+                  {Array.from({ length: volumeCount }, (_, i) => (
+                    <option key={i} value={i}>
+                      第{i + 1}卷
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </div>
+
+          {/* 选项 */}
+          <div className="field" style={{ marginBottom: 16 }}>
+            <label className="checkbox-line">
+              <input
+                type="checkbox"
+                checked={includeOutline}
+                onChange={(e) => setIncludeOutline(e.target.checked)}
+                style={{ accentColor: "var(--accent)" }}
+              />
+              包含故事设定
+            </label>
+            <label className="checkbox-line">
+              <input
+                type="checkbox"
+                checked={includeNotes}
+                onChange={(e) => setIncludeNotes(e.target.checked)}
+                style={{ accentColor: "var(--accent)" }}
+              />
+              包含章节概要
+            </label>
+          </div>
+
+          {err && (
+            <div style={{ marginBottom: 12 }}>
+              <ErrorNote>{err}</ErrorNote>
+            </div>
+          )}
+
+          <div className="modal-foot">
+            <button type="button" className="btn-ghost" onClick={onClose}>
+              取消
+            </button>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={handleExport}
+              disabled={loading}
+            >
+              <Download size={15} />
+              {loading ? "导出中…" : "导出"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

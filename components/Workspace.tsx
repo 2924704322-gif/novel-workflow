@@ -1,5 +1,8 @@
 "use client";
 
+// DEPRECATED（Q6 废弃）：拆除独立工作台路由，其能力（大纲 two-step / 正文 writing /
+// 角色对话）全部并入中栏对话系统。当前已无人 import（/project/[id] 重定向到 Studio）。
+// 保留文件仅供历史参考，请勿在新代码中 import。
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import StepOutline from "@/components/StepOutline";

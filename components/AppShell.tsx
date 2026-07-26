@@ -1,5 +1,7 @@
 "use client";
 
+// DEPRECATED: 被 components/studio/StudioShell 取代（FT-03）。保留文件仅供历史参考，
+// 请勿在新代码中 import。新主界面外壳见 components/studio/StudioShell.tsx。
 import { useCallback, useEffect, useRef, useState } from "react";
 import TopBar from "@/components/TopBar";
 import LeftRail from "@/components/LeftRail";

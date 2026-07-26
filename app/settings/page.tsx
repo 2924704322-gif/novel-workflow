@@ -302,7 +302,11 @@ export default function SettingsPage() {
                   max="2"
                   value={cfg.temperature}
                   onChange={(e) =>
-                    updateField("temperature", parseFloat(e.target.value) || 0)
+                    // 归一到两位小数，避免 float32 精度长尾（如 0.8500000238…）入库
+                    updateField(
+                      "temperature",
+                      Math.round((parseFloat(e.target.value) || 0) * 100) / 100
+                    )
                   }
                 />
               </div>

@@ -1,9 +1,10 @@
 "use client";
 
+// DEPRECATED: 被 components/studio/RightDock 取代（FT-08）。保留文件仅供历史参考，
+// 请勿在新代码中 import。新右栏见 components/studio/RightDock.tsx。
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import AgentChat from "@/components/AgentChat";
-import RoleplayChat from "@/components/RoleplayChat";
 
 /**
  * 右侧常驻面板 —— 双 Tab：「助手」（Agent 工具编排）和「角色对话」（Roleplay 沉浸式对话）。
@@ -51,12 +52,8 @@ export default function AgentPanel({ onCollapse }: { onCollapse: () => void }) {
       {/* 内容区 */}
       <div style={{ flex: 1, overflow: "hidden" }}>
         {tab === "agent" && <AgentChat flush projectId={projectId || undefined} />}
-        {tab === "roleplay" && projectId && (
-          <RoleplayChat flush projectId={projectId} />
-        )}
-        {tab === "roleplay" && !projectId && (
-          <div style={S.noProject}>请先打开一部作品，再使用角色对话。</div>
-        )}
+        {/* FT-21：角色对话（RoleplayChat）已迁出至中栏沉浸式酒馆对话模式，
+            不再由本已废弃的 AgentPanel 承载，故移除其挂载点。 */}
       </div>
     </div>
   );

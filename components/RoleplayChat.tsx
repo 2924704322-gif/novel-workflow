@@ -1,116 +1,131 @@
 "use client";
 
-// RoleplayChat —— 沉浸式角色对话面板。
-// 支持 1v1 对话和多角色轮转对话。
-// 视觉上与 AgentChat 风格一致（暖阁暖色调），但更简洁（无工具/提案面板）。
+// RoleplayChat —— 中栏沉浸式酒馆对话面板（FT-21）。
+//
+// 由「酒馆AI」页（#page-tavern）的「在酒馆里聊聊」或 startRoleplay 唤起，挂载在中栏。
+// 支持两种对话目标：
+//   - 单角色卡（1v1）：target.kind="character" → useRoleplay 走 /api/agent/roleplay
+//   - 单群组（多角色轮转）：target.kind="group" → useRoleplay 带 groupId，API 走 runGroupTurn
+//
+// 视觉统一清爽风（FT-01 令牌）：--surface / --border / --fg* / --accent / --bg，
+// 不再使用旧暖阁令牌（--ink-900 / --ink-800 / --paper / #c56a3f）。
 
 import { useEffect, useRef, useState } from "react";
-import type { ApiConfig, CodexEntry } from "@/lib/types";
+import type { ApiConfig } from "@/lib/types";
 import { loadConfig, getApiBase } from "@/lib/client";
-import { useRoleplay } from "@/lib/roleplay/useRoleplay";
-import type { RoleplayCharacterCard, RoleplayMessage, TurnMode } from "@/lib/roleplay/types";
+import {
+  useRoleplay,
+  type UseRoleplayOptions,
+} from "@/lib/roleplay/useRoleplay";
+import type {
+  RoleplayMessage,
+} from "@/lib/roleplay/types";
+import type { RoleplayGroup } from "@/lib/tavern/types";
+import type { RoleplayTarget } from "./studio/StudioProvider";
 
-interface CharInfo {
+/** 角色卡列表元数据（GET /api/tavern/characters 返回 CardMeta[]）。 */
+interface CharMeta {
   codexId: string;
   name: string;
-  summary: string;
+  updatedAt: number;
 }
 
 export interface RoleplayChatProps {
   projectId: string;
   config?: ApiConfig;
-  characters?: CharInfo[];       // 外部传入则不自行加载
-  onCollapse?: () => void;
-  flush?: boolean;
+  /** 当前对话目标；null = picker 态（用户尚未选角色/群组）。 */
+  target: RoleplayTarget | null;
+  /** 退出沉浸式酒馆对话，回到中栏创作工作台（ChatStudio）。 */
+  onExit?: () => void;
 }
 
 export default function RoleplayChat({
   projectId,
   config,
-  characters: externalChars,
-  onCollapse,
-  flush,
+  target,
+  onExit,
 }: RoleplayChatProps) {
   const [resolvedConfig] = useState<ApiConfig>(() => config ?? loadConfig());
-  // 多角色选择支持：selectedChars 为选中角色 codexId 数组
-  const [selectedChars, setSelectedChars] = useState<string[]>([]);
-  const [characters, setCharacters] = useState<CharInfo[]>(externalChars || []);
-  const [loading, setLoading] = useState(!externalChars);
-  const [turnMode, setTurnMode] = useState<TurnMode>("round-robin");
+  // 当前选中的对话目标；初始取 prop.target（picker 态时为 null）。
+  const [selected, setSelected] = useState<RoleplayTarget | null>(target);
+  const [characters, setCharacters] = useState<CharMeta[]>([]);
+  const [groups, setGroups] = useState<RoleplayGroup[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // 自动加载角色列表（从项目 codex 中筛选人物类型条目）
+  // 加载可用角色卡与群组（供 picker 选择）。
   useEffect(() => {
-    if (externalChars) return;
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`${getApiBase()}/api/projects/${projectId}`);
-        if (!res.ok) return;
-        const project = await res.json();
-        const chars: CharInfo[] = (project.codex || [])
-          .filter((e: CodexEntry) => e.category === "人物" && e.summary)
-          .map((e: CodexEntry) => ({ codexId: e.id, name: e.name, summary: e.summary }));
-        if (!cancelled) setCharacters(chars);
-      } catch { /* ignore */ }
-      finally { if (!cancelled) setLoading(false); }
+        const [charRes, grpRes] = await Promise.all([
+          fetch(`${getApiBase()}/api/tavern/characters`),
+          fetch(
+            `${getApiBase()}/api/tavern/groups?projectId=${encodeURIComponent(
+              projectId
+            )}`
+          ),
+        ]);
+        if (cancelled) return;
+        setCharacters(
+          charRes.ok ? ((await charRes.json()) as CharMeta[]) : []
+        );
+        setGroups(grpRes.ok ? ((await grpRes.json()) as RoleplayGroup[]) : []);
+      } catch {
+        // 网络/解析失败：picker 显示空态，不阻塞。
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     })();
-    return () => { cancelled = true; };
-  }, [projectId, externalChars]);
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
 
-  // 选角后挂载对话面板
-  if (selectedChars.length === 0) {
+  // picker 态：展示角色卡 / 群组选择。
+  if (!selected) {
     return (
-      <div style={{ ...S.outer, ...(flush ? S.flush : {}) }}>
-        <Header onCollapse={onCollapse} title="角色对话" />
+      <div style={S.outer}>
+        <Header onExit={onExit} title="选择对话对象" />
         {loading ? (
-          <div style={S.emptyState}>加载角色列表…</div>
+          <div style={S.emptyState}>加载角色与群组…</div>
         ) : (
-          <CharacterSelect
+          <Picker
             characters={characters}
-            turnMode={turnMode}
-            onTurnModeChange={setTurnMode}
-            onConfirm={(ids) => setSelectedChars(ids)}
+            groups={groups}
+            onPick={(t) => setSelected(t)}
           />
         )}
       </div>
     );
   }
 
-  // 构建 participants 列表
-  const participants: RoleplayCharacterCard[] = selectedChars.map((id) => {
-    const c = characters.find((ch) => ch.codexId === id);
-    return { codexId: id, name: c?.name || "角色", aliases: [], summary: c?.summary || "", persona: c?.summary || "" };
-  });
-
-  const isMulti = selectedChars.length > 1;
-  const primaryCharId = selectedChars[0];
-  const headerTitle = isMulti
-    ? `多角色对话 (${selectedChars.length}人)`
-    : characters.find((c) => c.codexId === primaryCharId)?.name || "对话中";
+  // chat 态：选中的目标已确定，挂载对话面板。
+  const isGroup = selected.kind === "group";
+  const group = isGroup
+    ? groups.find((g) => g.id === selected.groupId)
+    : undefined;
+  // 群组模式需要一个字符 codexId 作兜底（runGroupTurn 实际按 members 轮转）。
+  const primaryCharId = isGroup
+    ? group?.members[0] ?? ""
+    : selected.codexId;
+  const headerTitle = isGroup
+    ? group?.name ?? "群组对话"
+    : characters.find((c) => c.codexId === selected.codexId)?.name ?? "对话中";
 
   return (
-    <div style={{ ...S.outer, ...(flush ? S.flush : {}) }}>
+    <div style={S.outer}>
       <Header
-        onCollapse={onCollapse}
+        onExit={onExit}
         title={headerTitle}
-        onBack={() => setSelectedChars([])}
+        onBack={() => setSelected(null)}
       />
-      {/* 多角色顶部参与者标签 */}
-      {isMulti && (
-        <div style={S.participantsBar}>
-          {participants.map((p) => (
-            <span key={p.codexId} style={S.participantTag}>{p.name}</span>
-          ))}
-          <span style={S.turnModeTag}>{turnMode === "round-robin" ? "轮转" : turnMode === "manual" ? "手动" : "旁白"}</span>
-        </div>
-      )}
       <ChatPanel
         config={resolvedConfig}
         projectId={projectId}
+        target={selected}
         characterId={primaryCharId}
         characters={characters}
-        participants={isMulti ? participants : undefined}
-        turnMode={isMulti ? turnMode : undefined}
+        isGroup={isGroup}
       />
     </div>
   );
@@ -120,24 +135,24 @@ export default function RoleplayChat({
 
 function Header({
   title,
-  onCollapse,
+  onExit,
   onBack,
 }: {
   title: string;
-  onCollapse?: () => void;
+  onExit?: () => void;
   onBack?: () => void;
 }) {
   return (
     <div style={S.header}>
       {onBack && (
-        <button style={S.headerBtn} onClick={onBack} title="返回选角">
+        <button style={S.headerBtn} onClick={onBack} title="返回选择">
           ←
         </button>
       )}
       <span style={S.headerTitle}>{title}</span>
       <span style={{ flex: 1 }} />
-      {onCollapse && (
-        <button style={S.headerBtn} onClick={onCollapse} title="收起">
+      {onExit && (
+        <button style={S.headerBtn} onClick={onExit} title="退出酒馆对话">
           ✕
         </button>
       )}
@@ -145,97 +160,130 @@ function Header({
   );
 }
 
-function CharacterSelect({
+/** 角色卡 / 群组 单选 picker。 */
+function Picker({
   characters,
-  turnMode,
-  onTurnModeChange,
-  onConfirm,
+  groups,
+  onPick,
 }: {
-  characters: { codexId: string; name: string; summary: string }[];
-  turnMode: TurnMode;
-  onTurnModeChange: (mode: TurnMode) => void;
-  onConfirm: (ids: string[]) => void;
+  characters: CharMeta[];
+  groups: RoleplayGroup[];
+  onPick: (t: RoleplayTarget) => void;
 }) {
-  const [selected, setSelected] = useState<string[]>([]);
+  const [kind, setKind] = useState<"character" | "group">("character");
+  const [pickedChar, setPickedChar] = useState<string | null>(null);
+  const [pickedGroup, setPickedGroup] = useState<string | null>(null);
 
-  function toggle(id: string) {
-    setSelected((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+  const list = kind === "character" ? characters : groups;
+  const pickedId = kind === "character" ? pickedChar : pickedGroup;
+  const setPicked = kind === "character" ? setPickedChar : setPickedGroup;
+
+  function confirm() {
+    if (!pickedId) return;
+    onPick(
+      kind === "character"
+        ? { kind: "character", codexId: pickedId }
+        : { kind: "group", groupId: pickedId }
     );
   }
 
-  if (characters.length === 0) {
-    return (
-      <div style={S.emptyState}>
-        <p>当前作品没有可对话的角色。</p>
-        <p style={{ fontSize: 12, color: "var(--fg-dim)" }}>
-          请先在信息库中添加「人物」类型的设定条目（含概要）。
-        </p>
-      </div>
-    );
-  }
   return (
-    <div style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
-      <div style={{ padding: "8px 14px", fontSize: 12, color: "var(--fg-dim)", borderBottom: "1px solid var(--line)" }}>
-        点击选择角色（可多选），然后点击「开始对话」
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+      {/* 角色 / 群组 分段切换 */}
+      <div style={S.seg}>
+        <button
+          type="button"
+          style={{ ...S.segBtn, ...(kind === "character" ? S.segBtnOn : {}) }}
+          onClick={() => {
+            setKind("character");
+            setPickedGroup(null);
+          }}
+        >
+          角色卡
+        </button>
+        <button
+          type="button"
+          style={{ ...S.segBtn, ...(kind === "group" ? S.segBtnOn : {}) }}
+          onClick={() => {
+            setKind("group");
+            setPickedChar(null);
+          }}
+        >
+          群组
+        </button>
       </div>
-      <div style={S.charGrid}>
-        {characters.map((c) => {
-          const active = selected.includes(c.codexId);
-          return (
-            <button
-              key={c.codexId}
-              style={{
-                ...S.charCard,
-                borderColor: active ? "var(--accent, #c56a3f)" : undefined,
-                background: active ? "rgba(197,106,63,0.08)" : S.charCard.background,
-              }}
-              onClick={() => toggle(c.codexId)}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{
-                  width: 16, height: 16, borderRadius: 4, border: "1.5px solid var(--line-strong)",
-                  display: "inline-flex", alignItems: "center", justifyContent: "center",
-                  background: active ? "var(--accent, #c56a3f)" : "transparent",
-                  color: "#fff", fontSize: 11,
-                }}>{active ? "✓" : ""}</span>
-                <strong style={S.charName}>{c.name}</strong>
-              </div>
-              <span style={S.charSummary}>
-                {c.summary.length > 60 ? c.summary.slice(0, 60) + "…" : c.summary}
-              </span>
-            </button>
-          );
-        })}
+
+      <div style={S.pickerBody}>
+        {list.length === 0 ? (
+          <div style={S.emptyState}>
+            <p>
+              {kind === "character"
+                ? "当前还没有可用的角色卡。"
+                : "当前作品下还没有可用的群组。"}
+            </p>
+            <p style={{ fontSize: 12, color: "var(--fg-faint)" }}>
+              {kind === "character"
+                ? "请先在「酒馆配置台」导入或创建角色卡。"
+                : "群组管理器将在 FT-22 提供，可在此前手动准备数据。"}
+            </p>
+          </div>
+        ) : (
+          <div style={S.charGrid}>
+            {kind === "character"
+              ? characters.map((c) => {
+                  const active = pickedId === c.codexId;
+                  return (
+                    <button
+                      key={c.codexId}
+                      type="button"
+                      style={{
+                        ...S.charCard,
+                        borderColor: active ? "var(--accent)" : undefined,
+                        background: active ? "var(--accent-soft)" : S.charCard.background,
+                      }}
+                      onClick={() => setPicked(c.codexId)}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={S.checkBox}>{active ? "✓" : ""}</span>
+                        <strong style={S.charName}>{c.name}</strong>
+                      </div>
+                      <span style={S.charSummary}>角色卡</span>
+                    </button>
+                  );
+                })
+              : groups.map((g) => {
+                  const active = pickedId === g.id;
+                  return (
+                    <button
+                      key={g.id}
+                      type="button"
+                      style={{
+                        ...S.charCard,
+                        borderColor: active ? "var(--accent)" : undefined,
+                        background: active ? "var(--accent-soft)" : S.charCard.background,
+                      }}
+                      onClick={() => setPicked(g.id)}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={S.checkBox}>{active ? "✓" : ""}</span>
+                        <strong style={S.charName}>{g.name}</strong>
+                      </div>
+                      <span style={S.charSummary}>{`${g.members.length} 位成员`}</span>
+                    </button>
+                  );
+                })}
+          </div>
+        )}
       </div>
-      {/* 多角色时显示轮转模式选择 */}
-      {selected.length > 1 && (
-        <div style={{ padding: "6px 14px", display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--fg-dim)" }}>
-          <span>模式：</span>
-          {(["round-robin", "manual", "narrator-driven"] as TurnMode[]).map((m) => (
-            <button
-              key={m}
-              style={{
-                padding: "2px 8px", borderRadius: 4, border: "1px solid var(--line-strong)",
-                background: turnMode === m ? "var(--accent, #c56a3f)" : "transparent",
-                color: turnMode === m ? "#fff" : "var(--fg-dim)",
-                cursor: "pointer", fontSize: 11,
-              }}
-              onClick={() => onTurnModeChange(m)}
-            >
-              {m === "round-robin" ? "轮转" : m === "manual" ? "手动" : "旁白驱动"}
-            </button>
-          ))}
-        </div>
-      )}
-      <div style={{ padding: "10px 14px", borderTop: "1px solid var(--line)" }}>
+
+      <div style={{ padding: "10px 14px", borderTop: "1px solid var(--border)" }}>
         <button
           className="btn btn--primary btn--sm"
           style={{ width: "100%" }}
-          disabled={selected.length === 0}
-          onClick={() => onConfirm(selected)}
+          disabled={!pickedId}
+          onClick={confirm}
         >
-          开始对话{selected.length > 0 ? ` (${selected.length}人)` : ""}
+          开始对话
         </button>
       </div>
     </div>
@@ -245,33 +293,43 @@ function CharacterSelect({
 function ChatPanel({
   config,
   projectId,
+  target,
   characterId,
   characters,
-  participants,
-  turnMode,
+  isGroup,
 }: {
   config: ApiConfig;
   projectId: string;
+  target: RoleplayTarget;
   characterId: string;
-  characters: CharInfo[];
-  participants?: RoleplayCharacterCard[];
-  turnMode?: TurnMode;
+  characters: CharMeta[];
+  isGroup: boolean;
 }) {
-  const isMulti = !!participants && participants.length > 1;
-  const rp = useRoleplay({
-    config,
-    projectId,
-    characterId,
-    apiBase: getApiBase(),
-    participants,
-    turnMode,
-  });
+  // 构建 useRoleplay 入参：群组模式带 groupId + list/swap（FT-19/FT-20）。
+  const rpOptions: UseRoleplayOptions = isGroup
+    ? {
+        config,
+        projectId,
+        characterId,
+        apiBase: getApiBase(),
+        groupId: target.kind === "group" ? target.groupId : "",
+        activationStrategy: "list",
+        generationMode: "swap",
+      }
+    : {
+        config,
+        projectId,
+        characterId,
+        apiBase: getApiBase(),
+      };
+
+  const rp = useRoleplay(rpOptions);
   const { messages, streaming, streamingText, error, nextSpeaker } = rp;
 
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // 获取角色名 helper
+  // 角色名解析：优先用角色卡列表；群组消息的 characterId 为成员 codexId。
   function getCharName(charId?: string): string {
     if (!charId) return "角色";
     const c = characters.find((ch) => ch.codexId === charId);
@@ -296,9 +354,13 @@ function ChatPanel({
       <div ref={scrollRef} style={S.msgList}>
         {messages.length === 0 && !streaming && (
           <div style={S.emptyState}>
-            <p>开始与{isMulti ? "角色们" : `「${primaryCharName}」`}对话吧。</p>
+            <p>
+              开始与{isGroup ? "群组" : `「${primaryCharName}」`}对话吧。
+            </p>
             <p style={{ fontSize: 12, color: "var(--fg-dim)" }}>
-              {isMulti ? "多角色将按轮转模式依次回应。" : "角色将以第一人称回应，保持性格一致。"}
+              {isGroup
+                ? "群组成员将按 List 策略依次回应。"
+                : "角色将以第一人称回应，保持性格一致。"}
             </p>
           </div>
         )}
@@ -307,7 +369,7 @@ function ChatPanel({
             key={m.id}
             msg={m}
             characterName={getCharName(m.characterId)}
-            isMulti={isMulti}
+            isMulti={isGroup}
           />
         ))}
         {streaming && streamingText && (
@@ -320,31 +382,10 @@ function ChatPanel({
       </div>
 
       <div style={S.composer}>
-        {/* 多角色 manual 模式：发言者指示器 */}
-        {isMulti && turnMode === "manual" && participants && (
-          <div style={S.speakerIndicator}>
-            <span style={{ fontSize: 11, color: "var(--fg-dim)" }}>下一位：</span>
-            {participants.map((p) => (
-              <button
-                key={p.codexId}
-                style={{
-                  ...S.speakerBtn,
-                  background: (nextSpeaker === p.name || (!nextSpeaker && p.codexId === characterId))
-                    ? "var(--accent, #c56a3f)" : "transparent",
-                  color: (nextSpeaker === p.name || (!nextSpeaker && p.codexId === characterId))
-                    ? "#fff" : "var(--fg-dim)",
-                }}
-                onClick={() => rp.setNextSpeaker(p.codexId)}
-                title={`指定 ${p.name} 下一个发言`}
-              >
-                {p.name}
-              </button>
-            ))}
-          </div>
-        )}
-        {/* 非 manual 模式但多角色时，显示下一位提示 */}
-        {isMulti && turnMode !== "manual" && nextSpeaker && (
-          <div style={{ fontSize: 11, color: "var(--fg-dim)", padding: "0 0 4px" }}>
+        {isGroup && nextSpeaker && (
+          <div
+            style={{ fontSize: 11, color: "var(--fg-dim)", padding: "0 0 4px" }}
+          >
             下一位发言：{nextSpeaker}
           </div>
         )}
@@ -360,7 +401,7 @@ function ChatPanel({
                 submit();
               }
             }}
-            placeholder={streaming ? "角色回复中…" : "说点什么…"}
+            placeholder={streaming ? "回复中…" : "说点什么…"}
             disabled={streaming}
           />
           <div style={S.btnGroup}>
@@ -369,7 +410,11 @@ function ChatPanel({
                 停止
               </button>
             ) : (
-              <button className="btn btn--primary btn--sm" onClick={submit} disabled={!input.trim()}>
+              <button
+                className="btn btn--primary btn--sm"
+                onClick={submit}
+                disabled={!input.trim()}
+              >
                 发送
               </button>
             )}
@@ -406,29 +451,26 @@ function MessageBubble({
   );
 }
 
-// ---- 样式 ----
+// ---- 样式（清爽风令牌）----
 
 const S: Record<string, React.CSSProperties> = {
   outer: {
     display: "flex",
     flexDirection: "column",
     height: "100%",
-    background: "var(--paper)",
-    borderRadius: 12,
-    border: "1px solid var(--line)",
+    minHeight: 0,
+    background: "var(--surface)",
+    borderRadius: "var(--radius)",
+    border: "1px solid var(--border)",
     overflow: "hidden",
-  },
-  flush: {
-    borderRadius: 0,
-    border: "none",
   },
   header: {
     display: "flex",
     alignItems: "center",
     gap: 8,
     padding: "10px 14px",
-    borderBottom: "1px solid var(--line)",
-    background: "var(--ink-900)",
+    borderBottom: "1px solid var(--border)",
+    background: "var(--surface-2)",
   },
   headerTitle: {
     fontFamily: "var(--font-serif)",
@@ -445,25 +487,64 @@ const S: Record<string, React.CSSProperties> = {
     padding: "2px 6px",
     borderRadius: 4,
   },
+  seg: {
+    display: "flex",
+    gap: 4,
+    padding: "8px 14px",
+    background: "var(--surface-2)",
+    borderBottom: "1px solid var(--border)",
+  },
+  segBtn: {
+    flex: 1,
+    padding: "6px 0",
+    fontSize: 13,
+    borderRadius: "var(--radius-pill)",
+    border: "1px solid transparent",
+    background: "transparent",
+    color: "var(--fg-dim)",
+    cursor: "pointer",
+  },
+  segBtnOn: {
+    background: "var(--surface)",
+    color: "var(--fg)",
+    borderColor: "var(--accent)",
+    fontWeight: 600,
+  },
+  pickerBody: {
+    flex: 1,
+    minHeight: 0,
+    overflowY: "auto",
+  },
   charGrid: {
     display: "grid",
     gridTemplateColumns: "1fr",
     gap: 8,
     padding: 14,
-    overflowY: "auto",
-    flex: 1,
   },
   charCard: {
     display: "flex",
     flexDirection: "column",
     gap: 4,
     padding: "12px 14px",
-    borderRadius: 8,
-    border: "1px solid var(--line-strong)",
-    background: "var(--ink-800)",
+    borderRadius: "var(--radius-sm)",
+    border: "1px solid var(--border-strong)",
+    background: "var(--surface-2)",
     cursor: "pointer",
     textAlign: "left",
     transition: "border-color 0.15s",
+  },
+  checkBox: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+    border: "1.5px solid var(--border-strong)",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "var(--accent)",
+    color: "#fff",
+    fontSize: 11,
+    flex: "0 0 auto",
   },
   charName: {
     fontSize: 14,
@@ -483,6 +564,7 @@ const S: Record<string, React.CSSProperties> = {
   },
   msgList: {
     flex: 1,
+    minHeight: 0,
     overflowY: "auto",
     padding: "12px 14px",
     display: "flex",
@@ -499,13 +581,13 @@ const S: Record<string, React.CSSProperties> = {
   },
   bubbleUser: {
     alignSelf: "flex-end",
-    background: "rgba(197,106,63,0.12)",
+    background: "var(--accent-soft)",
     borderBottomRightRadius: 2,
   },
   bubbleChar: {
     alignSelf: "flex-start",
-    background: "var(--ink-800)",
-    border: "1px solid var(--line)",
+    background: "var(--surface-2)",
+    border: "1px solid var(--border)",
     borderBottomLeftRadius: 2,
   },
   bubbleName: {
@@ -520,8 +602,8 @@ const S: Record<string, React.CSSProperties> = {
   errorBanner: {
     padding: "8px 12px",
     borderRadius: 6,
-    background: "rgba(220,60,60,0.1)",
-    color: "#d44",
+    background: "rgba(229,72,77,0.1)",
+    color: "var(--danger)",
     fontSize: 13,
     textAlign: "center",
   },
@@ -530,18 +612,18 @@ const S: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     gap: 4,
     padding: "10px 14px",
-    borderTop: "1px solid var(--line)",
-    background: "var(--ink-900)",
+    borderTop: "1px solid var(--border)",
+    background: "var(--surface-2)",
   },
   textarea: {
     flex: 1,
     resize: "none",
-    border: "1px solid var(--line-strong)",
+    border: "1px solid var(--border-strong)",
     borderRadius: 8,
     padding: "8px 10px",
     fontSize: 14,
     fontFamily: "inherit",
-    background: "var(--ink-800)",
+    background: "var(--surface)",
     color: "var(--fg)",
     outline: "none",
   },
@@ -550,54 +632,12 @@ const S: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     gap: 4,
   },
-  // 多角色扩展样式
-  participantsBar: {
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-    padding: "6px 14px",
-    borderBottom: "1px solid var(--line)",
-    background: "var(--ink-900)",
-    flexWrap: "wrap",
-  },
-  participantTag: {
-    display: "inline-block",
-    padding: "2px 8px",
-    borderRadius: 10,
-    fontSize: 11,
-    background: "rgba(197,106,63,0.12)",
-    color: "var(--fg)",
-    fontWeight: 500,
-  },
-  turnModeTag: {
-    display: "inline-block",
-    padding: "2px 8px",
-    borderRadius: 10,
-    fontSize: 10,
-    background: "var(--ink-800)",
-    color: "var(--fg-dim)",
-    marginLeft: "auto",
-  },
-  speakerIndicator: {
-    display: "flex",
-    alignItems: "center",
-    gap: 4,
-    flexWrap: "wrap",
-    paddingBottom: 4,
-  },
-  speakerBtn: {
-    padding: "2px 8px",
-    borderRadius: 4,
-    border: "1px solid var(--line-strong)",
-    cursor: "pointer",
-    fontSize: 11,
-  },
   charTag: {
     display: "inline-block",
     width: 16,
     height: 16,
     borderRadius: "50%",
-    background: "var(--accent, #c56a3f)",
+    background: "var(--accent)",
     color: "#fff",
     fontSize: 9,
     textAlign: "center",
