@@ -14,6 +14,8 @@
 // - Matching is by explicit id (echoed back by the model); unknown ids are
 //   ignored, so a malformed reply can't corrupt the project.
 
+import { RECONCILE_CHAPTER_CAP } from "./constants";
+
 import type { Project } from "./types";
 import { flattenChapters } from "./retrieval";
 
@@ -72,7 +74,7 @@ export interface ReconcileResult {
 
 // Bound the prompt size on very long books: only the nearest downstream
 // chapters are sent for reconciliation in one pass.
-const MAX_CHAPTERS = 60;
+const MAX_CHAPTERS = RECONCILE_CHAPTER_CAP;
 
 export interface CollectOptions {
   // Only chapters with global >= fromGlobal are candidates (undefined = whole book).

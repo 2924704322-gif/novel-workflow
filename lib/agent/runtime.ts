@@ -12,6 +12,11 @@
 // 归属：Sub A（后端）。
 
 import type { ApiConfig } from "../types";
+import {
+  AGENT_MAX_STEPS,
+  AGENT_MAX_STEPS_SKILL,
+  AGENT_RUNTIME_TEMPERATURE,
+} from "../constants";
 import type {
   AgentChatRequest,
   AgentStreamEvent,
@@ -75,7 +80,7 @@ async function chatCompletion(
       messages,
       tools: effectiveTools,
       tool_choice: "auto",
-      temperature: cfg.temperature ?? 0.7,
+      temperature: cfg.temperature ?? AGENT_RUNTIME_TEMPERATURE,
       stream: false,
     }),
     signal,
@@ -147,8 +152,8 @@ function rid(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
 
-const MAX_STEPS = 8;
-const MAX_STEPS_SKILL = 12; // Skill 模式预期步骤更多
+const MAX_STEPS = AGENT_MAX_STEPS;
+const MAX_STEPS_SKILL = AGENT_MAX_STEPS_SKILL; // Skill 模式预期步骤更多
 
 export interface RuntimeContext {
   ownerId: string;

@@ -42,7 +42,7 @@ export interface UseChat {
   activeSkill: string | null; // 当前正在执行的技能名称（null=无）
   send: (text: string) => void;
   runSkill: (skillId: string, skillParams: Record<string, string>) => void;
-  confirm: (proposalId: string, approved: boolean) => void;
+  confirm: (proposalId: string, approved: boolean, mdBody?: string) => void;
   stop: () => void;
   reset: () => void;
 }
@@ -106,9 +106,12 @@ export function useChat(opts: UseChatOptions): UseChat {
               setToolActivity([...tools]);
               break;
             }
-            case "proposal":
-              setProposals((prev) => [...prev, ev.proposal]);
+            case "proposal": {
+              // FT-06：提案事件随 ChangeProposal 契约透传，md 字段（若有）原样挂入 proposals。
+              const proposal: ChangeProposal = { ...ev.proposal, md: ev.proposal.md };
+              setProposals((prev) => [...prev, proposal]);
               break;
+            }
             case "error":
               setError(ev.message);
               break;
@@ -175,9 +178,17 @@ export function useChat(opts: UseChatOptions): UseChat {
   );
 
   const confirm = useCallback(
-    (proposalId: string, approved: boolean) => {
+    (proposalId: string, approved: boolean, mdBody?: string) => {
       if (streaming) return;
-      setProposals((prev) => prev.filter((p) => p.id !== proposalId));
+      setProposals((prev) => {
+        const target = prev.find((p) => p.id === proposalId);
+        // FT-06：确认写入时若卡片内编辑过 body，以 textarea 当前值为准回填提案，
+        // 保证「编辑后 body 以提案卡内 textarea 值为准」落到后续流程（FT-09 落稿）。
+        if (target && target.md && typeof mdBody === "string") {
+          target.md = { ...target.md, body: mdBody };
+        }
+        return prev.filter((p) => p.id !== proposalId);
+      });
       void runTurn(messages, [{ proposalId, approved }]);
     },
     [messages, runTurn, streaming]

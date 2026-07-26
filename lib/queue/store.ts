@@ -44,6 +44,8 @@ export async function enqueueTask(
     maxRetries: def.maxRetries ?? 3,
     createdAt: Date.now(),
     updatedAt: Date.now(),
+    // 固化入队时生效配置，供 start 时优先采用。
+    config: def.config,
   };
 
   await fs.writeFile(

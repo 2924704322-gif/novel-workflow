@@ -10,6 +10,7 @@
 // activeCharacterId 标明当前回合的发言角色。
 
 import type { ApiConfig, CodexEntry } from "../types";
+import type { RoleplayGroup } from "../tavern/types";
 
 // ---- 角色卡 ----
 
@@ -68,6 +69,14 @@ export interface RoleplayRequest {
   participants?: RoleplayCharacterCard[];  // 多角色参与者列表
   turnMode?: TurnMode;                    // 轮转策略
   targetCharacterId?: string;             // manual 模式下指定下一位发言者
+  // —— 酒馆AI 群组 / lorebook 扩展（FT-18/FT-19/FT-20，向后兼容，全可选）——
+  groupId?: string;                       // 走群组范式（RoleplayGroup.id）
+  lorebookIds?: string[];                 // 显式指定额外 lorebook
+  scanDepth?: number;                     // lorebook 扫描深度（覆盖默认 20）
+  tokenBudget?: number;                   // lorebook token 预算（覆盖默认 1024）
+  activationStrategy?: RoleplayGroup["activationStrategy"]; // manual 时前端指定
+  generationMode?: RoleplayGroup["generationMode"];        // swap | append
+  scenarioOverride?: string;              // 群组/请求级 scenario 覆盖
 }
 
 export type RoleplayStreamEvent =

@@ -1,4 +1,5 @@
 import type { ApiConfig } from "./types";
+import { LLM_DEFAULT_TEMPERATURE, LLM_MAX_TOKENS } from "./constants";
 
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -45,8 +46,8 @@ export async function streamChat(
     body: JSON.stringify({
       model: cfg.model,
       messages,
-      temperature: cfg.temperature ?? 0.8,
-      max_tokens: opts?.maxTokens ?? 8192,
+      temperature: cfg.temperature ?? LLM_DEFAULT_TEMPERATURE,
+      max_tokens: opts?.maxTokens ?? LLM_MAX_TOKENS,
       stream: true,
     }),
     signal: opts?.signal,

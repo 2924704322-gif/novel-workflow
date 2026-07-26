@@ -6,7 +6,7 @@
 //   - mockChatStream：本地假流，模拟文本增量 / 工具调用 / 写操作提案 / 确认回执；
 //   - httpChatStream：解析真实 NDJSON 流，联调时把 useChat 的 transport 换成它即可。
 
-import type { AgentChatRequest, AgentStreamEvent } from "./types";
+import type { AgentChatRequest, AgentStreamEvent, MdDraft } from "./types";
 
 // 传输层统一形态：给定一次请求，异步产出一串 AgentStreamEvent。
 export type ChatTransport = (
@@ -46,6 +46,41 @@ function chunkText(text: string): string[] {
 
 // 触发“写操作提案”的意图关键词（仅 mock 用，真实意图判定在 runtime/工具层）。
 const WRITE_INTENT = /(新建|生成|创建|续写|写|保存|扩写|改写|重写)/;
+
+// FT-06：根据写意图生成一份符合 MdDraft 契约的 .md 提案（演示中栏 HITL 可编辑卡）。
+function buildMdDraft(userText: string): MdDraft {
+  const t = userText.slice(0, 24);
+  if (/(章节|正文|续写|草稿|开篇|第.章)/.test(userText)) {
+    return {
+      fileName: "第1章_初稿.md",
+      kind: "chapter",
+      targetChapterId: "ch-001", // Q12：Agent 显式产出章节定位
+      body: `# 第1章 初稿\n\n> 由 AI 根据「${t}」生成，确认后落稿到右栏「阅读」。\n\n夜色像浸了墨的宣纸，缓缓铺开……（正文草稿占位）\n`,
+    };
+  }
+  if (/(人物|角色|主角|配角)/.test(userText)) {
+    return {
+      fileName: "人物设定_主角.md",
+      kind: "setting",
+      settingKind: "character",
+      body: `# 人物设定\n\n> 由 AI 根据「${t}」生成。\n\n- 姓名：（待补充）\n- 身份：（待补充）\n- 动机：（待补充）\n- 弧光：（待补充）\n`,
+    };
+  }
+  if (/(大纲|卷|脉络|分卷)/.test(userText)) {
+    return {
+      fileName: "大纲_卷一.md",
+      kind: "setting",
+      settingKind: "outline",
+      body: `# 大纲 · 卷一\n\n> 由 AI 根据「${t}」生成。\n\n## 卷一主题\n（待补充）\n\n## 关键转折\n1. （待补充）\n2. （待补充）\n`,
+    };
+  }
+  return {
+    fileName: "世界观.md",
+    kind: "setting",
+    settingKind: "world",
+    body: `# 世界观\n\n> 由 AI 根据「${t}」生成。\n\n## 地理\n（待补充）\n\n## 势力\n（待补充）\n\n## 核心法则\n（待补充）\n`,
+  };
+}
 
 /**
  * 本地 mock 流：
@@ -118,12 +153,13 @@ export async function* mockChatStream(
         id: proposalId,
         tool: "save_project",
         args: { projectId: req.projectId ?? null, intent: userText },
-        changeSummary: `根据「${userText.slice(0, 40)}」拟写入 1 处改动，等待你确认后才落库。`,
+        changeSummary: `根据「${userText.slice(0, 40)}」拟写入 1 处改动（含 .md 提案），等待你确认后才落库。`,
         diff: {
           kind: "text",
           before: "（原内容）",
           after: "（拟写入的新内容——mock 占位）",
         },
+        md: buildMdDraft(userText), // FT-06：附 MdDraft，驱动中栏 HitlMdCard
       },
     };
     // 提案发出后本轮先结束，等待 UI 回传 confirmations 再走确认分支。

@@ -5,6 +5,7 @@
 // 需要调整时先在主会话更新本文件与 TASKBOARD.md，再同步两个子分支。
 
 import type { ApiConfig } from "../types";
+import type { DocKind } from "../docsStore";
 
 // ---- 会话数据模型（§3.6，经 Repository 落存储：本地 JSON / 未来 DB） ----
 
@@ -42,6 +43,17 @@ export interface ChangeProposal {
   args: unknown; // 待执行入参
   changeSummary: string; // 人类可读的变更摘要
   diff?: unknown; // 目标 diff（结构由具体工具定义）
+  md?: MdDraft; // ✅ FT-06：可编辑 .md 提案（MdDraft 定义见下方）
+}
+
+// ✅ FT-06（本批先行定义，以解除 StudioProvider 契约依赖）：可编辑 .md 写操作提案。
+// 章节类（kind==="chapter"）确认后落右栏「阅读」；设定类（kind==="setting"）落右栏「文档」。
+export interface MdDraft {
+  fileName: string; // 第3章_长夜微光.md
+  kind: "chapter" | "setting"; // 章节类→右栏方格稿纸；设定类→右栏文档
+  settingKind?: DocKind; // kind==="setting" 时的文档种类
+  targetChapterId?: string; // ✅ Q12：Agent 显式产出，定位 Project 章节
+  body: string; // 可编辑 markdown 初始内容
 }
 
 export interface ConfirmToken {

@@ -3,6 +3,8 @@
 // 将长任务（批量续写、批量摘要等）分解为 step 序列，入队后逐步执行，
 // 支持失败重试和从上次成功 step 恢复。
 
+import type { ApiConfig } from "../types";
+
 export type TaskStatus = "pending" | "running" | "paused" | "done" | "failed";
 export type StepStatus = "pending" | "running" | "done" | "failed";
 
@@ -31,6 +33,9 @@ export interface TaskRun {
   createdAt: number;
   updatedAt: number;
   completedAt?: number;
+  // 入队时固化的生效配置（来自客户端 loadConfig()）。start 时优先采用，
+  // 避免每次 start 都依赖客户端重新取配置、也避免入队/开始两端配置不一致。
+  config?: ApiConfig;
 }
 
 /** 创建任务时的输入。 */
@@ -39,6 +44,8 @@ export interface TaskDefinition {
   projectId: string;
   steps: Omit<TaskStep, "status" | "startedAt" | "completedAt" | "result" | "error">[];
   maxRetries?: number;
+  // 入队时固化的生效配置（可选，缺省时由 start 调用方以 body.config 兜底）。
+  config?: ApiConfig;
 }
 
 /** 任务进度事件（SSE 推送）。 */

@@ -15,6 +15,10 @@ import type {
   ReconcileResult,
 } from "./reconcile";
 import type { RecentSummary } from "./retrieval";
+import type { DocMeta, DocRecord } from "./docsStore";
+import type { ApplyResult } from "./studioActions";
+import type { MdDraft } from "./agent/types";
+import { CLIENT_DEFAULT_TEMPERATURE } from "./constants";
 
 const CONFIG_KEY = "novel-workflow.apiConfig"; // legacy single-config key (auto-migrated)
 const PROFILES_KEY = "novel-workflow.apiProfiles";
@@ -47,7 +51,7 @@ export const DEFAULT_CONFIG: ApiConfig = {
   baseUrl: "https://api.deepseek.com/v1",
   apiKey: "",
   model: "deepseek-v4-flash",
-  temperature: 0.85,
+  temperature: CLIENT_DEFAULT_TEMPERATURE,
 };
 
 // A named API profile lets users keep several providers/models and switch
@@ -229,6 +233,50 @@ export async function saveProjectRemote(project: Project): Promise<Project> {
 
 export async function deleteProjectRemote(id: string): Promise<void> {
   await fetch(apiUrl(`/api/projects/${id}`), { method: "DELETE" });
+}
+
+// ---- studio docs / 确认写入 helpers（P0-1：client 不直连 fs，改走 API）----
+export async function fetchDocs(projectId: string): Promise<DocMeta[]> {
+  const res = await fetch(apiUrl(`/api/projects/${projectId}/docs`), {
+    cache: "no-store",
+  });
+  if (!res.ok) return [];
+  const data = (await res.json()) as { docs?: DocMeta[] };
+  return data.docs ?? [];
+}
+
+export async function fetchDoc(
+  projectId: string,
+  name: string
+): Promise<DocRecord | null> {
+  const res = await fetch(
+    apiUrl(`/api/projects/${projectId}/docs?name=${encodeURIComponent(name)}`),
+    { cache: "no-store" }
+  );
+  if (!res.ok) return null;
+  const data = (await res.json()) as { doc?: DocRecord };
+  return data.doc ?? null;
+}
+
+/** FT-09 确认写入闭环：把 .md 提案交给服务端落盘，回传定位结果。失败抛错。 */
+export async function confirmMdRemote(
+  projectId: string,
+  draft: MdDraft
+): Promise<ApplyResult> {
+  const res = await fetch(apiUrl("/api/studio/confirm-md"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ projectId, draft }),
+  });
+  const data = (await res.json().catch(() => ({}))) as {
+    ok?: boolean;
+    result?: ApplyResult;
+    error?: string;
+  };
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || `落稿失败 (${res.status})`);
+  }
+  return data.result ?? {};
 }
 
 // ---- style card / story archive library helpers ----

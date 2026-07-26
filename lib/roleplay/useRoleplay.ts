@@ -8,6 +8,12 @@ import { useCallback, useRef, useState } from "react";
 import type { ApiConfig } from "../types";
 import type { RoleplayCharacterCard, RoleplayMessage, RoleplayRequest, RoleplayStreamEvent, TurnMode } from "./types";
 
+/** 群组激活策略（对齐 RoleplayGroup.activationStrategy，FT-19/FT-20）。 */
+export type ActivationStrategy = "manual" | "list" | "natural" | "pooled";
+
+/** 群组生成模式（swap=替换上一轮 / append=追加到上下文，FT-19/FT-20）。 */
+export type GenerationMode = "swap" | "append";
+
 export interface UseRoleplayOptions {
   config: ApiConfig;
   projectId: string;
@@ -18,6 +24,21 @@ export interface UseRoleplayOptions {
   // 多角色扩展
   participants?: RoleplayCharacterCard[];
   turnMode?: TurnMode;
+  // —— 酒馆AI 群组 / lorebook 扩展（FT-18/FT-19/FT-20，向后兼容，全可选）——
+  /** 走群组范式（RoleplayGroup.id）；存在时 API 路由到 runGroupTurn。 */
+  groupId?: string;
+  /** 显式指定额外 lorebook（覆盖角色私有书）。 */
+  lorebookIds?: string[];
+  /** lorebook 扫描深度（覆盖默认 20）。 */
+  scanDepth?: number;
+  /** lorebook token 预算（覆盖默认 1024）。 */
+  tokenBudget?: number;
+  /** 群组激活策略（manual 时前端指定）。 */
+  activationStrategy?: ActivationStrategy;
+  /** 群组生成模式（swap | append）。 */
+  generationMode?: GenerationMode;
+  /** 群组/请求级 scenario 覆盖。 */
+  scenarioOverride?: string;
 }
 
 export interface UseRoleplay {
@@ -38,7 +59,23 @@ function generateMsgId(): string {
 }
 
 export function useRoleplay(opts: UseRoleplayOptions): UseRoleplay {
-  const { config, projectId, characterId, apiBase = "", initialMessages = [], sessionId: initSessionId, participants, turnMode } = opts;
+  const {
+    config,
+    projectId,
+    characterId,
+    apiBase = "",
+    initialMessages = [],
+    sessionId: initSessionId,
+    participants,
+    turnMode,
+    groupId,
+    lorebookIds,
+    scanDepth,
+    tokenBudget,
+    activationStrategy,
+    generationMode,
+    scenarioOverride,
+  } = opts;
 
   const [messages, setMessages] = useState<RoleplayMessage[]>(initialMessages);
   const [streaming, setStreaming] = useState(false);
@@ -68,6 +105,14 @@ export function useRoleplay(opts: UseRoleplayOptions): UseRoleplay {
         participants,
         turnMode,
         targetCharacterId: targetCharRef.current || undefined,
+        // —— 酒馆AI 群组 / lorebook 扩展（仅当显式传入时带上，向后兼容）——
+        ...(groupId ? { groupId } : {}),
+        ...(lorebookIds && lorebookIds.length > 0 ? { lorebookIds } : {}),
+        ...(scanDepth != null ? { scanDepth } : {}),
+        ...(tokenBudget != null ? { tokenBudget } : {}),
+        ...(activationStrategy ? { activationStrategy } : {}),
+        ...(generationMode ? { generationMode } : {}),
+        ...(scenarioOverride != null && scenarioOverride !== "" ? { scenarioOverride } : {}),
       };
 
       let acc = "";
@@ -150,7 +195,7 @@ export function useRoleplay(opts: UseRoleplayOptions): UseRoleplay {
         abortRef.current = null;
       }
     },
-    [config, projectId, characterId, apiBase, sessionId, participants, turnMode]
+    [config, projectId, characterId, apiBase, sessionId, participants, turnMode, groupId, lorebookIds, scanDepth, tokenBudget, activationStrategy, generationMode, scenarioOverride]
   );
 
   const send = useCallback(

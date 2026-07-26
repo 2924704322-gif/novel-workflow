@@ -7,7 +7,7 @@
 // 契约冻结（阶段 0）——两个子会话（后端 / 客户端）都以此接口为准，勿改签名。
 // Sub A（后端）负责：让 app/api 与工具层统一经此接口访问数据、加固实现。
 
-import type { Project } from "./types";
+import { countWords, type Project } from "./types";
 import {
   listProjects as fsListProjects,
   getProject as fsGetProject,
@@ -23,6 +23,14 @@ export interface ProjectRepository {
   get(ownerId: string, id: string): Promise<Project | null>;
   save(ownerId: string, project: Project): Promise<Project>;
   delete(ownerId: string, id: string): Promise<void>;
+  /** FT-09：原子改写某一章节正文（读后改 volumes[].chapters[].content 再存，避免整本重写）。 */
+  applyChapterContent(
+    ownerId: string,
+    id: string,
+    volId: string,
+    chId: string,
+    body: string
+  ): Promise<Project>;
 }
 
 // 文件系统实现：当前唯一实现。ownerId="local" 直接命中现有 data/projects/*.json，
@@ -43,6 +51,33 @@ export class FileSystemProjectRepository implements ProjectRepository {
 
   async delete(_ownerId: string, id: string): Promise<void> {
     return fsDeleteProject(id);
+  }
+
+  async applyChapterContent(
+    _ownerId: string,
+    id: string,
+    volId: string,
+    chId: string,
+    body: string
+  ): Promise<Project> {
+    const project = await fsGetProject(id);
+    if (!project) throw new Error(`project not found: ${id}`);
+    let found = false;
+    for (const v of project.volumes) {
+      if (v.id !== volId) continue;
+      for (const c of v.chapters) {
+        if (c.id !== chId) continue;
+        c.content = body;
+        c.wordCount = countWords(body);
+        c.status = body && body.trim() ? "done" : "empty";
+        c.updatedAt = Date.now();
+        found = true;
+      }
+    }
+    if (!found) {
+      throw new Error(`chapter not found: vol=${volId} ch=${chId}`);
+    }
+    return fsSaveProject(project);
   }
 }
 
